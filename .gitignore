@@ -1,0 +1,84 @@
+# =============================================
+# SentinelOps - .gitignore
+# =============================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Datasets - large files tracked by DVC, not git
+datasets/
+data/raw/
+data/processed/
+data/reference/
+
+# Models - tracked by MLflow/DVC
+models/
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.onnx
+
+# Reports and metrics output
+reports/*.json
+reports/*.html
+metrics/
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# DVC
+.dvc/tmp/
+.dvc/cache/
+
+# Evidently
+evidently_reports/
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temp files
+*.log
+*.tmp
+*.temp
+phase1_run.txt
+pip_install.txt
+test_results*.txt
+inspect_*.txt
+inspect_*.py
+
+# Secrets / Config
+.env
+*.env
+secrets.yaml

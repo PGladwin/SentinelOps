@@ -1,0 +1,148 @@
+# =============================================================================
+# SentinelOps - Central Parameter Store
+# =============================================================================
+# All pipeline stages read from this file.
+# Do NOT hardcode these values inside Python source files.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# General / Reproducibility
+# ---------------------------------------------------------------------------
+general:
+  random_seed: 42
+  project_name: SentinelOps
+  version: "0.1.0"
+
+# ---------------------------------------------------------------------------
+# Data Paths
+# ---------------------------------------------------------------------------
+paths:
+  parquet_dir: "datasets/CIC-IDS2017-paraquet"
+  processed_dir: "data/processed"
+  reference_dir: "data/reference"
+  reports_dir: "reports"
+  models_dir: "models"
+  metrics_dir: "metrics"
+
+# ---------------------------------------------------------------------------
+# Data Ingestion (src/data/ingest.py)
+# ---------------------------------------------------------------------------
+ingestion:
+  # Expected Parquet files (order matters for reproducibility)
+  expected_files:
+    - "Benign-Monday-no-metadata.parquet"
+    - "Botnet-Friday-no-metadata.parquet"
+    - "Bruteforce-Tuesday-no-metadata.parquet"
+    - "DDoS-Friday-no-metadata.parquet"
+    - "DoS-Wednesday-no-metadata.parquet"
+    - "Infiltration-Thursday-no-metadata.parquet"
+    - "Portscan-Friday-no-metadata.parquet"
+    - "WebAttacks-Thursday-no-metadata.parquet"
+
+# ---------------------------------------------------------------------------
+# Data Cleaning (src/data/clean.py)
+# ---------------------------------------------------------------------------
+cleaning:
+  # Replace Inf / -Inf with NaN before further handling
+  replace_inf_with_nan: true
+
+  # Strategy for NaN after Inf replacement: "median" | "mean" | "zero" | "drop"
+  nan_fill_strategy: "median"
+
+  # Drop duplicate rows
+  drop_duplicates: true
+
+  # Drop columns that are constant across the ENTIRE combined dataset
+  drop_constant_columns: true
+
+  # Raw label to canonical class mapping.
+  # The normalizer strips whitespace and replaces U+FFFD (replacement char)
+  # with " - " before matching these keys.
+  label_map:
+    "Benign": "BENIGN"
+    "Bot": "Botnet"
+    "DDoS": "DDoS"
+    "DoS GoldenEye": "DoS"
+    "DoS Hulk": "DoS"
+    "DoS Slowhttptest": "DoS"
+    "DoS slowloris": "DoS"
+    "FTP-Patator": "BruteForce"
+    "Heartbleed": "DoS"
+    "Infiltration": "Infiltration"
+    "PortScan": "PortScan"
+    "SSH-Patator": "BruteForce"
+    "Web Attack - Brute Force": "WebAttack"
+    "Web Attack - XSS": "WebAttack"
+    "Web Attack - Sql Injection": "WebAttack"
+
+  # Integer encoding for final 8 classes
+  class_encoding:
+    BENIGN: 0
+    DoS: 1
+    DDoS: 2
+    PortScan: 3
+    BruteForce: 4
+    Botnet: 5
+    WebAttack: 6
+    Infiltration: 7
+
+# ---------------------------------------------------------------------------
+# Preprocessing (src/data/preprocess.py)
+# ---------------------------------------------------------------------------
+preprocessing:
+  # Correlation threshold: drop one feature from highly-correlated pairs
+  # Set to null to skip correlation filtering
+  correlation_threshold: 0.95
+
+  # Scaler: "standard" | "robust" | "minmax"
+  scaler: "robust"
+
+  # Test set fraction
+  test_size: 0.20
+
+  # Development sample rows (stratified from full cleaned dataset)
+  # Set to null to use full dataset
+  dev_sample_size: 150000
+
+# ---------------------------------------------------------------------------
+# Training (placeholder - populated in Phase 2)
+# ---------------------------------------------------------------------------
+training:
+  random_forest:
+    n_estimators: 100
+    max_depth: 20
+    min_samples_leaf: 2
+    n_jobs: -1
+    class_weight: "balanced"
+
+  xgboost:
+    n_estimators: 200
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    eval_metric: "mlogloss"
+    n_jobs: -1
+
+  mlp:
+    hidden_layers: [128, 64, 32]
+    dropout_rate: 0.3
+    batch_size: 512
+    max_epochs: 50
+    learning_rate: 0.001
+    early_stopping_patience: 5
+
+# ---------------------------------------------------------------------------
+# Governance (placeholder - populated in Phase 4)
+# ---------------------------------------------------------------------------
+governance:
+  min_f1_improvement: 0.001
+  max_mean_fnr: 0.10
+  max_per_class_fnr: 0.30
+
+# ---------------------------------------------------------------------------
+# Drift Detection (placeholder - populated in Phase 5)
+# ---------------------------------------------------------------------------
+drift:
+  drift_share_threshold: 0.20
+  stattest: "ks"

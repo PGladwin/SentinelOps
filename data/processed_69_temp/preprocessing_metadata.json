@@ -1,0 +1,53 @@
+{
+  "random_seed": 42,
+  "scaler_type": "robust",
+  "nan_fill_strategy": "median",
+  "test_size": 0.2,
+  "dev_sample_size": 150000,
+  "used_dev_sample": true,
+  "total_samples_before_split": 149996,
+  "n_train": 119996,
+  "n_test": 30000,
+  "n_features_before_corr_filter": 69,
+  "n_features_after_corr_filter": 69,
+  "corr_threshold": null,
+  "dropped_corr_features": [],
+  "class_encoding": {
+    "BENIGN": 0,
+    "DoS": 1,
+    "DDoS": 2,
+    "PortScan": 3,
+    "BruteForce": 4,
+    "Botnet": 5,
+    "WebAttack": 6,
+    "Infiltration": 7
+  },
+  "train_class_distribution": {
+    "BENIGN": 101906,
+    "DoS": 10418,
+    "DDoS": 6882,
+    "PortScan": 105,
+    "BruteForce": 491,
+    "Botnet": 77,
+    "WebAttack": 115,
+    "Infiltration": 2
+  },
+  "test_class_distribution": {
+    "BENIGN": 25478,
+    "DoS": 2604,
+    "DDoS": 1721,
+    "PortScan": 26,
+    "BruteForce": 123,
+    "Botnet": 19,
+    "WebAttack": 29
+  },
+  "artifacts": {
+    "scaler": "data\\processed_69_temp\\scaler.pkl",
+    "fill_values": "data\\processed_69_temp\\fill_values.json",
+    "feature_names": "data\\processed_69_temp\\feature_names.json",
+    "class_encoding": "data\\processed_69_temp\\class_encoding.json",
+    "inverse_encoding": "data\\processed_69_temp\\inverse_encoding.json",
+    "train_parquet": "data\\processed_69_temp\\train.parquet",
+    "test_parquet": "data\\processed_69_temp\\test.parquet"
+  }
+}
