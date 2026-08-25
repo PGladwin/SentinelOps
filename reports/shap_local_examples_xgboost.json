@@ -1,0 +1,118 @@
+{
+  "model": "XGBoost",
+  "explainer": "TreeExplainer",
+  "sample_size": 1000,
+  "local_examples": [
+    {
+      "sample_type": "BENIGN Baseline Traffic",
+      "true_class": "BENIGN",
+      "predicted_class": "BENIGN",
+      "top_5_feature_contributions": [
+        {
+          "feature": "Fwd Packet Length Max",
+          "feature_value": 19.738182067871094,
+          "shap_contribution": 1.2404495477676392,
+          "direction": "increases risk/probability"
+        },
+        {
+          "feature": "Active Std",
+          "feature_value": 245954.359375,
+          "shap_contribution": 0.7913404107093811,
+          "direction": "increases risk/probability"
+        },
+        {
+          "feature": "Active Min",
+          "feature_value": 80356.0,
+          "shap_contribution": 0.563530445098877,
+          "direction": "increases risk/probability"
+        },
+        {
+          "feature": "Fwd Packets Length Total",
+          "feature_value": 77.53704071044922,
+          "shap_contribution": 0.5486094951629639,
+          "direction": "increases risk/probability"
+        },
+        {
+          "feature": "Init Fwd Win Bytes",
+          "feature_value": 3.535335063934326,
+          "shap_contribution": 0.3665104806423187,
+          "direction": "increases risk/probability"
+        }
+      ]
+    },
+    {
+      "sample_type": "High-Volume Attack (DoS/DDoS)",
+      "true_class": "DoS",
+      "predicted_class": "DoS",
+      "top_5_feature_contributions": [
+        {
+          "feature": "Fwd Packet Length Mean",
+          "feature_value": 3.9067163467407227,
+          "shap_contribution": 1.2940590381622314,
+          "direction": "increases risk/probability"
+        },
+        {
+          "feature": "Fwd IAT Std",
+          "feature_value": 6.782026290893555,
+          "shap_contribution": 1.2618755102157593,
+          "direction": "increases risk/probability"
+        },
+        {
+          "feature": "Bwd IAT Std",
+          "feature_value": 536.5646362304688,
+          "shap_contribution": 0.9875900149345398,
+          "direction": "increases risk/probability"
+        },
+        {
+          "feature": "Init Bwd Win Bytes",
+          "feature_value": 0.0042372881434857845,
+          "shap_contribution": -0.653376042842865,
+          "direction": "decreases risk/probability"
+        },
+        {
+          "feature": "Bwd IAT Max",
+          "feature_value": 451.3461608886719,
+          "shap_contribution": 0.5444713234901428,
+          "direction": "increases risk/probability"
+        }
+      ]
+    },
+    {
+      "sample_type": "Targeted Attack (BruteForce/WebAttack/PortScan)",
+      "true_class": "BruteForce",
+      "predicted_class": "BruteForce",
+      "top_5_feature_contributions": [
+        {
+          "feature": "Fwd PSH Flags",
+          "feature_value": 1.0,
+          "shap_contribution": 2.0508859157562256,
+          "direction": "increases risk/probability"
+        },
+        {
+          "feature": "Fwd Seg Size Min",
+          "feature_value": 1.0,
+          "shap_contribution": 1.6328613758087158,
+          "direction": "increases risk/probability"
+        },
+        {
+          "feature": "Init Fwd Win Bytes",
+          "feature_value": -0.0007323324680328369,
+          "shap_contribution": 1.326101303100586,
+          "direction": "increases risk/probability"
+        },
+        {
+          "feature": "Bwd Packets/s",
+          "feature_value": 60.64163589477539,
+          "shap_contribution": 0.7211546301841736,
+          "direction": "increases risk/probability"
+        },
+        {
+          "feature": "Flow IAT Mean",
+          "feature_value": -0.03264038637280464,
+          "shap_contribution": 0.40485912561416626,
+          "direction": "increases risk/probability"
+        }
+      ]
+    }
+  ]
+}

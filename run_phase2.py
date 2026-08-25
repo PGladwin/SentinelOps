@@ -308,6 +308,42 @@ def main():
     }
     save_model(champion_xgb, "xgboost_top40", models_dir, champion_meta)
 
+    # ----------------------------------------------------------------
+    # Build serving artifacts: raw -> Champion inference bundle + demo bank
+    # ----------------------------------------------------------------
+    # The bundle lets the API accept RAW flow values (packet counts, byte
+    # rates) and apply Phase 1 scaling server-side. It slices the fitted
+    # 48-feature RobustScaler down to the Champion's 40 columns, which is
+    # exact because RobustScaler transforms each column independently.
+    from src.data.inference_prep import build_inference_bundle, save_inference_bundle
+    from src.models.demo_samples import build_demo_samples, save_demo_samples
+
+    processed_dir = Path(params["paths"]["processed_dir"])
+    logger.info("Building raw-input inference bundle for the Champion...")
+    bundle = build_inference_bundle(
+        champion_features=top40_names,
+        scaler_path=processed_dir / "scaler.pkl",
+        fill_values_path=processed_dir / "fill_values.json",
+        feature_names_path=processed_dir / "feature_names.json",
+    )
+    save_inference_bundle(bundle, models_dir / "champion_preprocessor.json")
+
+    # Pre-bake demo flows so the API never loads test.parquet at startup.
+    try:
+        logger.info("Building demo sample bank from source Parquet files...")
+        demo = build_demo_samples(
+            parquet_dir=params["paths"]["parquet_dir"],
+            champion_features=top40_names,
+            model=champion_xgb,
+            bundle=bundle,
+            inverse_encoding=inverse_encoding,
+            label_map=params["cleaning"]["label_map"],
+            random_seed=params.get("general", {}).get("random_seed", 42),
+        )
+        save_demo_samples(demo, models_dir / "demo_samples.json")
+    except Exception as e:
+        logger.error(f"Demo sample generation failed (non-fatal): {e}", exc_info=True)
+
     # Evaluate Top-40 Champion on test set
     champ_metrics = evaluate_model(
         model=champion_xgb,

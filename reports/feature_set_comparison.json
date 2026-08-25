@@ -1,0 +1,759 @@
+{
+  "experiment": "Feature Set Dimension Comparison (XGB Champion Evaluator)",
+  "model_evaluator": "XGB with balanced sample weights",
+  "best_feature_set": "Top-40 Features",
+  "results": [
+    {
+      "feature_set": "Top-40 Features",
+      "feature_count": 40,
+      "macro_f1": 0.952917,
+      "mean_attack_fnr": 0.024115,
+      "macro_attack_f1": 0.945168,
+      "mean_fnr": 0.020816,
+      "weighted_f1": 0.999023,
+      "accuracy": 0.998967,
+      "mean_minority_f1": 0.918567,
+      "training_time_seconds": 7.2861,
+      "inference_latency_ms_per_1000": 2.8567,
+      "per_class_metrics": {
+        "BENIGN": {
+          "class_id": 0,
+          "support": 25478,
+          "precision": 0.999843,
+          "recall": 0.99898,
+          "f1": 0.999411,
+          "fnr": 0.00102,
+          "tp": 25452,
+          "fn": 26,
+          "fp": 4,
+          "tn": 4518,
+          "insufficient_test_support": false
+        },
+        "DoS": {
+          "class_id": 1,
+          "support": 2604,
+          "precision": 0.995031,
+          "recall": 0.999616,
+          "f1": 0.997318,
+          "fnr": 0.000384,
+          "tp": 2603,
+          "fn": 1,
+          "fp": 13,
+          "tn": 27383,
+          "insufficient_test_support": false
+        },
+        "DDoS": {
+          "class_id": 2,
+          "support": 1721,
+          "precision": 0.999419,
+          "recall": 0.999419,
+          "f1": 0.999419,
+          "fnr": 0.000581,
+          "tp": 1720,
+          "fn": 1,
+          "fp": 1,
+          "tn": 28278,
+          "insufficient_test_support": false
+        },
+        "PortScan": {
+          "class_id": 3,
+          "support": 26,
+          "precision": 1.0,
+          "recall": 0.961538,
+          "f1": 0.980392,
+          "fnr": 0.038462,
+          "tp": 25,
+          "fn": 1,
+          "fp": 0,
+          "tn": 29974,
+          "insufficient_test_support": false
+        },
+        "BruteForce": {
+          "class_id": 4,
+          "support": 123,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "fnr": 0.0,
+          "tp": 123,
+          "fn": 0,
+          "fp": 0,
+          "tn": 29877,
+          "insufficient_test_support": false
+        },
+        "Botnet": {
+          "class_id": 5,
+          "support": 19,
+          "precision": 0.566667,
+          "recall": 0.894737,
+          "f1": 0.693878,
+          "fnr": 0.105263,
+          "tp": 17,
+          "fn": 2,
+          "fp": 13,
+          "tn": 29968,
+          "insufficient_test_support": false
+        },
+        "WebAttack": {
+          "class_id": 6,
+          "support": 29,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "fnr": 0.0,
+          "tp": 29,
+          "fn": 0,
+          "fp": 0,
+          "tn": 29971,
+          "insufficient_test_support": false
+        },
+        "Infiltration": {
+          "class_id": 7,
+          "support": 0,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "fnr": null,
+          "tp": 0,
+          "fn": 0,
+          "fp": 0,
+          "tn": 30000,
+          "insufficient_test_support": true,
+          "note": "Zero test samples present in evaluation split."
+        }
+      }
+    },
+    {
+      "feature_set": "48-Feature Set (Phase 1 Baseline)",
+      "feature_count": 48,
+      "macro_f1": 0.949033,
+      "mean_attack_fnr": 0.024115,
+      "macro_attack_f1": 0.940649,
+      "mean_fnr": 0.020833,
+      "weighted_f1": 0.998939,
+      "accuracy": 0.998867,
+      "mean_minority_f1": 0.911765,
+      "training_time_seconds": 7.727,
+      "inference_latency_ms_per_1000": 2.9254,
+      "per_class_metrics": {
+        "BENIGN": {
+          "class_id": 0,
+          "support": 25478,
+          "precision": 0.999804,
+          "recall": 0.998862,
+          "f1": 0.999332,
+          "fnr": 0.001138,
+          "tp": 25449,
+          "fn": 29,
+          "fp": 5,
+          "tn": 4517,
+          "insufficient_test_support": false
+        },
+        "DoS": {
+          "class_id": 1,
+          "support": 2604,
+          "precision": 0.99465,
+          "recall": 0.999616,
+          "f1": 0.997127,
+          "fnr": 0.000384,
+          "tp": 2603,
+          "fn": 1,
+          "fp": 14,
+          "tn": 27382,
+          "insufficient_test_support": false
+        },
+        "DDoS": {
+          "class_id": 2,
+          "support": 1721,
+          "precision": 1.0,
+          "recall": 0.999419,
+          "f1": 0.999709,
+          "fnr": 0.000581,
+          "tp": 1720,
+          "fn": 1,
+          "fp": 0,
+          "tn": 28279,
+          "insufficient_test_support": false
+        },
+        "PortScan": {
+          "class_id": 3,
+          "support": 26,
+          "precision": 1.0,
+          "recall": 0.961538,
+          "f1": 0.980392,
+          "fnr": 0.038462,
+          "tp": 25,
+          "fn": 1,
+          "fp": 0,
+          "tn": 29974,
+          "insufficient_test_support": false
+        },
+        "BruteForce": {
+          "class_id": 4,
+          "support": 123,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "fnr": 0.0,
+          "tp": 123,
+          "fn": 0,
+          "fp": 0,
+          "tn": 29877,
+          "insufficient_test_support": false
+        },
+        "Botnet": {
+          "class_id": 5,
+          "support": 19,
+          "precision": 0.53125,
+          "recall": 0.894737,
+          "f1": 0.666667,
+          "fnr": 0.105263,
+          "tp": 17,
+          "fn": 2,
+          "fp": 15,
+          "tn": 29966,
+          "insufficient_test_support": false
+        },
+        "WebAttack": {
+          "class_id": 6,
+          "support": 29,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "fnr": 0.0,
+          "tp": 29,
+          "fn": 0,
+          "fp": 0,
+          "tn": 29971,
+          "insufficient_test_support": false
+        },
+        "Infiltration": {
+          "class_id": 7,
+          "support": 0,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "fnr": null,
+          "tp": 0,
+          "fn": 0,
+          "fp": 0,
+          "tn": 30000,
+          "insufficient_test_support": true,
+          "note": "Zero test samples present in evaluation split."
+        }
+      }
+    },
+    {
+      "feature_set": "69-Feature Set (No Correlation Drop)",
+      "feature_count": 69,
+      "macro_f1": 0.827876,
+      "mean_attack_fnr": 0.030364,
+      "macro_attack_f1": 0.937283,
+      "mean_fnr": 0.0262,
+      "weighted_f1": 0.998921,
+      "accuracy": 0.998833,
+      "mean_minority_f1": 0.906667,
+      "training_time_seconds": 11.1682,
+      "inference_latency_ms_per_1000": 2.941,
+      "per_class_metrics": {
+        "BENIGN": {
+          "class_id": 0,
+          "support": 25478,
+          "precision": 0.999843,
+          "recall": 0.998783,
+          "f1": 0.999313,
+          "fnr": 0.001217,
+          "tp": 25447,
+          "fn": 31,
+          "fp": 4,
+          "tn": 4518,
+          "insufficient_test_support": false
+        },
+        "DoS": {
+          "class_id": 1,
+          "support": 2604,
+          "precision": 0.994652,
+          "recall": 1.0,
+          "f1": 0.997319,
+          "fnr": 0.0,
+          "tp": 2604,
+          "fn": 0,
+          "fp": 14,
+          "tn": 27382,
+          "insufficient_test_support": false
+        },
+        "DDoS": {
+          "class_id": 2,
+          "support": 1721,
+          "precision": 0.999419,
+          "recall": 1.0,
+          "f1": 0.99971,
+          "fnr": 0.0,
+          "tp": 1721,
+          "fn": 0,
+          "fp": 1,
+          "tn": 28278,
+          "insufficient_test_support": false
+        },
+        "PortScan": {
+          "class_id": 3,
+          "support": 26,
+          "precision": 1.0,
+          "recall": 0.923077,
+          "f1": 0.96,
+          "fnr": 0.076923,
+          "tp": 24,
+          "fn": 2,
+          "fp": 0,
+          "tn": 29974,
+          "insufficient_test_support": false
+        },
+        "BruteForce": {
+          "class_id": 4,
+          "support": 123,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "fnr": 0.0,
+          "tp": 123,
+          "fn": 0,
+          "fp": 0,
+          "tn": 29877,
+          "insufficient_test_support": false
+        },
+        "Botnet": {
+          "class_id": 5,
+          "support": 19,
+          "precision": 0.53125,
+          "recall": 0.894737,
+          "f1": 0.666667,
+          "fnr": 0.105263,
+          "tp": 17,
+          "fn": 2,
+          "fp": 15,
+          "tn": 29966,
+          "insufficient_test_support": false
+        },
+        "WebAttack": {
+          "class_id": 6,
+          "support": 29,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "fnr": 0.0,
+          "tp": 29,
+          "fn": 0,
+          "fp": 0,
+          "tn": 29971,
+          "insufficient_test_support": false
+        },
+        "Infiltration": {
+          "class_id": 7,
+          "support": 0,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "fnr": null,
+          "tp": 0,
+          "fn": 0,
+          "fp": 1,
+          "tn": 29999,
+          "insufficient_test_support": true,
+          "note": "Zero test samples present in evaluation split."
+        }
+      }
+    },
+    {
+      "feature_set": "Top-30 Features",
+      "feature_count": 30,
+      "macro_f1": 0.714861,
+      "mean_attack_fnr": 0.068968,
+      "macro_attack_f1": 0.669124,
+      "mean_fnr": 0.061998,
+      "weighted_f1": 0.986552,
+      "accuracy": 0.9819,
+      "mean_minority_f1": 0.508793,
+      "training_time_seconds": 6.3485,
+      "inference_latency_ms_per_1000": 2.8749,
+      "per_class_metrics": {
+        "BENIGN": {
+          "class_id": 0,
+          "support": 25478,
+          "precision": 0.99892,
+          "recall": 0.979826,
+          "f1": 0.989281,
+          "fnr": 0.020174,
+          "tp": 24964,
+          "fn": 514,
+          "fp": 27,
+          "tn": 4495,
+          "insufficient_test_support": false
+        },
+        "DoS": {
+          "class_id": 1,
+          "support": 2604,
+          "precision": 0.969652,
+          "recall": 0.993856,
+          "f1": 0.981604,
+          "fnr": 0.006144,
+          "tp": 2588,
+          "fn": 16,
+          "fp": 81,
+          "tn": 27315,
+          "insufficient_test_support": false
+        },
+        "DDoS": {
+          "class_id": 2,
+          "support": 1721,
+          "precision": 0.996524,
+          "recall": 0.999419,
+          "f1": 0.997969,
+          "fnr": 0.000581,
+          "tp": 1720,
+          "fn": 1,
+          "fp": 6,
+          "tn": 28273,
+          "insufficient_test_support": false
+        },
+        "PortScan": {
+          "class_id": 3,
+          "support": 26,
+          "precision": 1.0,
+          "recall": 0.923077,
+          "f1": 0.96,
+          "fnr": 0.076923,
+          "tp": 24,
+          "fn": 2,
+          "fp": 0,
+          "tn": 29974,
+          "insufficient_test_support": false
+        },
+        "BruteForce": {
+          "class_id": 4,
+          "support": 123,
+          "precision": 0.519651,
+          "recall": 0.96748,
+          "f1": 0.676136,
+          "fnr": 0.03252,
+          "tp": 119,
+          "fn": 4,
+          "fp": 110,
+          "tn": 29767,
+          "insufficient_test_support": false
+        },
+        "Botnet": {
+          "class_id": 5,
+          "support": 19,
+          "precision": 0.092105,
+          "recall": 0.736842,
+          "f1": 0.163743,
+          "fnr": 0.263158,
+          "tp": 14,
+          "fn": 5,
+          "fp": 138,
+          "tn": 29843,
+          "insufficient_test_support": false
+        },
+        "WebAttack": {
+          "class_id": 6,
+          "support": 29,
+          "precision": 0.133971,
+          "recall": 0.965517,
+          "f1": 0.235294,
+          "fnr": 0.034483,
+          "tp": 28,
+          "fn": 1,
+          "fp": 181,
+          "tn": 29790,
+          "insufficient_test_support": false
+        },
+        "Infiltration": {
+          "class_id": 7,
+          "support": 0,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "fnr": null,
+          "tp": 0,
+          "fn": 0,
+          "fp": 0,
+          "tn": 30000,
+          "insufficient_test_support": true,
+          "note": "Zero test samples present in evaluation split."
+        }
+      }
+    },
+    {
+      "feature_set": "Top-20 Features",
+      "feature_count": 20,
+      "macro_f1": 0.699749,
+      "mean_attack_fnr": 0.072813,
+      "macro_attack_f1": 0.651872,
+      "mean_fnr": 0.065916,
+      "weighted_f1": 0.984112,
+      "accuracy": 0.9781,
+      "mean_minority_f1": 0.484096,
+      "training_time_seconds": 5.2418,
+      "inference_latency_ms_per_1000": 2.9326,
+      "per_class_metrics": {
+        "BENIGN": {
+          "class_id": 0,
+          "support": 25478,
+          "precision": 0.998834,
+          "recall": 0.975469,
+          "f1": 0.987014,
+          "fnr": 0.024531,
+          "tp": 24853,
+          "fn": 625,
+          "fp": 29,
+          "tn": 4493,
+          "insufficient_test_support": false
+        },
+        "DoS": {
+          "class_id": 1,
+          "support": 2604,
+          "precision": 0.960624,
+          "recall": 0.993088,
+          "f1": 0.976586,
+          "fnr": 0.006912,
+          "tp": 2586,
+          "fn": 18,
+          "fp": 106,
+          "tn": 27290,
+          "insufficient_test_support": false
+        },
+        "DDoS": {
+          "class_id": 2,
+          "support": 1721,
+          "precision": 0.997101,
+          "recall": 0.999419,
+          "f1": 0.998259,
+          "fnr": 0.000581,
+          "tp": 1720,
+          "fn": 1,
+          "fp": 5,
+          "tn": 28274,
+          "insufficient_test_support": false
+        },
+        "PortScan": {
+          "class_id": 3,
+          "support": 26,
+          "precision": 0.925926,
+          "recall": 0.961538,
+          "f1": 0.943396,
+          "fnr": 0.038462,
+          "tp": 25,
+          "fn": 1,
+          "fp": 2,
+          "tn": 29972,
+          "insufficient_test_support": false
+        },
+        "BruteForce": {
+          "class_id": 4,
+          "support": 123,
+          "precision": 0.517544,
+          "recall": 0.95935,
+          "f1": 0.672365,
+          "fnr": 0.04065,
+          "tp": 118,
+          "fn": 5,
+          "fp": 110,
+          "tn": 29767,
+          "insufficient_test_support": false
+        },
+        "Botnet": {
+          "class_id": 5,
+          "support": 19,
+          "precision": 0.073864,
+          "recall": 0.684211,
+          "f1": 0.133333,
+          "fnr": 0.315789,
+          "tp": 13,
+          "fn": 6,
+          "fp": 163,
+          "tn": 29818,
+          "insufficient_test_support": false
+        },
+        "WebAttack": {
+          "class_id": 6,
+          "support": 29,
+          "precision": 0.103704,
+          "recall": 0.965517,
+          "f1": 0.187291,
+          "fnr": 0.034483,
+          "tp": 28,
+          "fn": 1,
+          "fp": 242,
+          "tn": 29729,
+          "insufficient_test_support": false
+        },
+        "Infiltration": {
+          "class_id": 7,
+          "support": 0,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "fnr": null,
+          "tp": 0,
+          "fn": 0,
+          "fp": 0,
+          "tn": 30000,
+          "insufficient_test_support": true,
+          "note": "Zero test samples present in evaluation split."
+        }
+      }
+    }
+  ],
+  "top_features_ranked": [
+    {
+      "rank": 1,
+      "feature": "Packet Length Max",
+      "importance": 0.09431397169828415
+    },
+    {
+      "rank": 2,
+      "feature": "Fwd PSH Flags",
+      "importance": 0.07257223129272461
+    },
+    {
+      "rank": 3,
+      "feature": "Packet Length Min",
+      "importance": 0.06518466025590897
+    },
+    {
+      "rank": 4,
+      "feature": "Active Std",
+      "importance": 0.06221393495798111
+    },
+    {
+      "rank": 5,
+      "feature": "PSH Flag Count",
+      "importance": 0.05432722717523575
+    },
+    {
+      "rank": 6,
+      "feature": "Fwd IAT Std",
+      "importance": 0.05367507413029671
+    },
+    {
+      "rank": 7,
+      "feature": "Flow IAT Max",
+      "importance": 0.05133180320262909
+    },
+    {
+      "rank": 8,
+      "feature": "Active Min",
+      "importance": 0.05113530158996582
+    },
+    {
+      "rank": 9,
+      "feature": "Bwd Packet Length Min",
+      "importance": 0.05086478218436241
+    },
+    {
+      "rank": 10,
+      "feature": "Bwd IAT Min",
+      "importance": 0.041832856833934784
+    },
+    {
+      "rank": 11,
+      "feature": "Fwd Act Data Packets",
+      "importance": 0.039250344038009644
+    },
+    {
+      "rank": 12,
+      "feature": "Fwd Packet Length Mean",
+      "importance": 0.03499837964773178
+    },
+    {
+      "rank": 13,
+      "feature": "Packet Length Mean",
+      "importance": 0.0325394831597805
+    },
+    {
+      "rank": 14,
+      "feature": "Bwd Header Length",
+      "importance": 0.030104927718639374
+    },
+    {
+      "rank": 15,
+      "feature": "Fwd Packets Length Total",
+      "importance": 0.026098554953932762
+    },
+    {
+      "rank": 16,
+      "feature": "Idle Std",
+      "importance": 0.0222344808280468
+    },
+    {
+      "rank": 17,
+      "feature": "Fwd Header Length",
+      "importance": 0.02082284539937973
+    },
+    {
+      "rank": 18,
+      "feature": "Flow Packets/s",
+      "importance": 0.019562192261219025
+    },
+    {
+      "rank": 19,
+      "feature": "Bwd Packets/s",
+      "importance": 0.014976945705711842
+    },
+    {
+      "rank": 20,
+      "feature": "Fwd Seg Size Min",
+      "importance": 0.014449147507548332
+    },
+    {
+      "rank": 21,
+      "feature": "Fwd IAT Mean",
+      "importance": 0.011035562492907047
+    },
+    {
+      "rank": 22,
+      "feature": "Flow Duration",
+      "importance": 0.010911152698099613
+    },
+    {
+      "rank": 23,
+      "feature": "Bwd Packet Length Max",
+      "importance": 0.010377006605267525
+    },
+    {
+      "rank": 24,
+      "feature": "Fwd Packet Length Min",
+      "importance": 0.009984337724745274
+    },
+    {
+      "rank": 25,
+      "feature": "Fwd Packet Length Max",
+      "importance": 0.009900044649839401
+    },
+    {
+      "rank": 26,
+      "feature": "Flow IAT Mean",
+      "importance": 0.009441277012228966
+    },
+    {
+      "rank": 27,
+      "feature": "Active Max",
+      "importance": 0.008926501497626305
+    },
+    {
+      "rank": 28,
+      "feature": "Bwd IAT Mean",
+      "importance": 0.006548032164573669
+    },
+    {
+      "rank": 29,
+      "feature": "FIN Flag Count",
+      "importance": 0.006545640993863344
+    },
+    {
+      "rank": 30,
+      "feature": "Down/Up Ratio",
+      "importance": 0.006158357951790094
+    }
+  ]
+}

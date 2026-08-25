@@ -256,7 +256,12 @@ def run_preprocessing(
     # ----------------------------------------------------------------
     from sklearn.model_selection import train_test_split
 
-    X_raw = working_df[feature_cols].copy()
+    # float32 rather than the mixed int8/int32/float32 source dtypes: .values
+    # on a mixed frame upcasts to float64, which doubles peak memory on the
+    # full 2.2M-row corpus. Downstream consumers (RobustScaler, XGBoost,
+    # sklearn) all operate in float32 anyway, so no precision is lost that
+    # survives to the model.
+    X_raw = working_df[feature_cols].astype(np.float32)
     y_encoded, encode_stats = encode_labels(working_df["label_class"], class_encoding)
 
     logger.info(f"Splitting: test_size={test_size}, seed={random_seed}")
@@ -300,6 +305,7 @@ def run_preprocessing(
     # Keep column names for later correlation analysis
     X_train_df = pd.DataFrame(X_train_raw, columns=feature_cols)
     X_test_df = pd.DataFrame(X_test_raw, columns=feature_cols)
+    del X_train_raw, X_test_raw, X_raw
 
     logger.info(f"  Train: {len(X_train_df):,} rows")
     logger.info(f"  Test : {len(X_test_df):,} rows")

@@ -1,0 +1,94 @@
+# =============================================================================
+# SentinelOps - DVC Pipeline
+# =============================================================================
+# Reproduce everything:            dvc repro
+# Reproduce one stage:             dvc repro preprocess
+# Show the DAG:                    dvc dag
+# See what changed:                dvc status
+#
+# Every stage declares the params.yaml keys it depends on, so changing (say)
+# preprocessing.correlation_threshold invalidates preprocess/train but NOT the
+# expensive prepare_data ingestion stage.
+# =============================================================================
+
+stages:
+
+  prepare_data:
+    desc: Ingest 8 CIC-IDS2017 Parquet files, normalize labels, drop duplicates and constant columns.
+    cmd: python scripts/stage_prepare_data.py
+    deps:
+      - datasets/CIC-IDS2017-paraquet
+      - scripts/stage_prepare_data.py
+      - src/data/ingest.py
+      - src/data/clean.py
+    params:
+      - general.random_seed
+      - paths.parquet_dir
+      - ingestion.expected_files
+      - cleaning.replace_inf_with_nan
+      - cleaning.drop_duplicates
+      - cleaning.drop_constant_columns
+      - cleaning.label_map
+    outs:
+      - data/interim/clean.parquet
+    metrics:
+      - reports/phase1_cleaning_report.json:
+          cache: false
+
+  preprocess:
+    desc: Stratified split, train-only NaN fill, correlation filter and RobustScaler.
+    cmd: python scripts/stage_preprocess.py
+    deps:
+      - data/interim/clean.parquet
+      - scripts/stage_preprocess.py
+      - src/data/preprocess.py
+    params:
+      - general.random_seed
+      - preprocessing.correlation_threshold
+      - preprocessing.scaler
+      - preprocessing.test_size
+      - preprocessing.dev_sample_size
+      - cleaning.nan_fill_strategy
+      - cleaning.class_encoding
+    outs:
+      - data/processed
+
+  train:
+    desc: Train the configured sweep, log to MLflow, and apply the champion/challenger gate.
+    cmd: python scripts/run_experiment_sweep.py
+    deps:
+      - data/processed
+      - scripts/run_experiment_sweep.py
+      - src/models/train.py
+      - src/models/evaluate.py
+      - src/models/feature_experiment.py
+      - src/mlops/governance.py
+      - src/mlops/tracking.py
+      - src/data/inference_prep.py
+      - src/models/demo_samples.py
+    params:
+      - general.random_seed
+      - training
+      - governance
+    outs:
+      # cache: false keeps the champion artifacts in git rather than the DVC
+      # cache. They are small (a few MB) and the deployed container builds
+      # straight from the repo with no DVC remote available, so caching them
+      # would make the image unbuildable. DVC still tracks them for the DAG.
+      - models:
+          cache: false
+    metrics:
+      - reports/mlops_state.json:
+          cache: false
+
+  drift_reference:
+    desc: Snapshot the training distribution as the Evidently drift baseline.
+    cmd: python scripts/stage_drift_reference.py
+    deps:
+      - data/processed
+      - scripts/stage_drift_reference.py
+      - src/mlops/drift.py
+    params:
+      - drift
+    outs:
+      - data/reference

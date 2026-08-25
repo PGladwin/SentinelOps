@@ -18,6 +18,7 @@ general:
 # ---------------------------------------------------------------------------
 paths:
   parquet_dir: "datasets/CIC-IDS2017-paraquet"
+  interim_dir: "data/interim"
   processed_dir: "data/processed"
   reference_dir: "data/reference"
   reports_dir: "reports"
@@ -100,9 +101,13 @@ preprocessing:
   # Test set fraction
   test_size: 0.20
 
-  # Development sample rows (stratified from full cleaned dataset)
-  # Set to null to use full dataset
-  dev_sample_size: 150000
+  # Development sample rows (stratified from full cleaned dataset).
+  # null = train on the FULL cleaned dataset. This is the production setting:
+  # a 150k sample leaves Infiltration with 2 train / 0 test rows, making its
+  # per-class FNR uncomputable and leaving PortScan/Botnet/WebAttack with
+  # 19-29 test rows apiece.
+  # Lives here rather than behind a CLI flag so DVC can detect changes to it.
+  dev_sample_size: null
 
 # ---------------------------------------------------------------------------
 # Training (placeholder - populated in Phase 2)
@@ -126,7 +131,8 @@ training:
 
   mlp:
     hidden_layers: [128, 64, 32]
-    dropout_rate: 0.3
+    # NOTE: no dropout_rate here -- sklearn's MLPClassifier does not support
+    # dropout, so the key that used to sit here was silently ignored.
     batch_size: 512
     max_epochs: 50
     learning_rate: 0.001
@@ -144,5 +150,33 @@ governance:
 # Drift Detection (placeholder - populated in Phase 5)
 # ---------------------------------------------------------------------------
 drift:
+  # Fraction of features that must shift before the DATASET is called drifted.
+  # One moved column is noise; a fifth of them is a changed world.
   drift_share_threshold: 0.20
-  stattest: "ks"
+
+  # Per-feature test: "auto" | "ks" | "wasserstein"
+  # "auto" uses KS below 1000 rows and normalized Wasserstein above it. A KS
+  # test on tens of thousands of rows returns p ~ 0 for differences far too
+  # small to act on, so every feature would read as drifted -- it measures
+  # confidence that a shift exists, not whether the shift matters.
+  stattest: "auto"
+
+  # KS p-value cutoff (small samples).
+  pvalue_threshold: 0.05
+
+  # Wasserstein distance in units of the reference standard deviation
+  # (large samples). Scale-free, so one threshold works across features.
+  distance_threshold: 0.10
+
+  # Rows sampled from the training split to form the baseline.
+  reference_max_rows: 50000
+
+# ---------------------------------------------------------------------------
+# SOC Dashboard (api/main.py, api/model_service.py)
+# ---------------------------------------------------------------------------
+soc:
+  # Attack-rate cutoffs for the threat-level banner.
+  # attack_rate >= high -> HIGH; >= medium -> MEDIUM; otherwise LOW.
+  threat_level_thresholds:
+    high: 0.20
+    medium: 0.05

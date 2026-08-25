@@ -1,0 +1,127 @@
+{
+  "generated_at": "2026-08-21T21:42:13.027561+00:00",
+  "drift_detected": true,
+  "n_features": 47,
+  "n_drifted_features": 21,
+  "drift_share": 0.446809,
+  "drift_share_threshold": 0.2,
+  "stattest": "auto",
+  "reference_rows": 50000,
+  "current_rows": 20000,
+  "drifted_features": [
+    "Protocol",
+    "Flow Duration",
+    "Fwd Packet Length Min",
+    "Bwd Packet Length Max",
+    "Bwd Packet Length Min",
+    "Flow IAT Mean",
+    "Flow IAT Std",
+    "Flow IAT Max",
+    "Fwd IAT Mean",
+    "Fwd IAT Std",
+    "Bwd IAT Std",
+    "Bwd IAT Max",
+    "Packet Length Min",
+    "Packet Length Max",
+    "Packet Length Mean",
+    "Packet Length Variance",
+    "FIN Flag Count",
+    "ACK Flag Count",
+    "URG Flag Count",
+    "Down/Up Ratio",
+    "Idle Std"
+  ],
+  "top_drifted_features": [
+    {
+      "feature": "Bwd Packet Length Max",
+      "test": "wasserstein",
+      "score": 0.666837,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Packet Length Max",
+      "test": "wasserstein",
+      "score": 0.625027,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Packet Length Mean",
+      "test": "wasserstein",
+      "score": 0.606606,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Packet Length Variance",
+      "test": "wasserstein",
+      "score": 0.593262,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Fwd IAT Std",
+      "test": "wasserstein",
+      "score": 0.559143,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Flow IAT Max",
+      "test": "wasserstein",
+      "score": 0.529517,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Flow IAT Std",
+      "test": "wasserstein",
+      "score": 0.462047,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Protocol",
+      "test": "wasserstein",
+      "score": 0.334908,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Flow Duration",
+      "test": "wasserstein",
+      "score": 0.331282,
+      "threshold": 0.1
+    },
+    {
+      "feature": "FIN Flag Count",
+      "test": "wasserstein",
+      "score": 0.318811,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Packet Length Min",
+      "test": "wasserstein",
+      "score": 0.278135,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Flow IAT Mean",
+      "test": "wasserstein",
+      "score": 0.271677,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Bwd Packet Length Min",
+      "test": "wasserstein",
+      "score": 0.254354,
+      "threshold": 0.1
+    },
+    {
+      "feature": "Fwd IAT Mean",
+      "test": "wasserstein",
+      "score": 0.239254,
+      "threshold": 0.1
+    },
+    {
+      "feature": "ACK Flag Count",
+      "test": "wasserstein",
+      "score": 0.23429,
+      "threshold": 0.1
+    }
+  ],
+  "current_source": "held-out test rows resampled to 50% attack"
+}

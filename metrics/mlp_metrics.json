@@ -1,0 +1,213 @@
+{
+  "model_name": "mlp",
+  "test_samples": 30000,
+  "summary": {
+    "accuracy": 0.966367,
+    "macro_f1": 0.660215,
+    "macro_precision": 0.681122,
+    "macro_recall": 0.641807,
+    "weighted_f1": 0.96491,
+    "weighted_precision": 0.964635,
+    "weighted_recall": 0.966367,
+    "mean_fnr": 0.358193,
+    "mean_attack_fnr": 0.416643,
+    "macro_attack_f1": 0.606511,
+    "macro_attack_recall": 0.583357,
+    "mean_minority_f1": 0.477506,
+    "mean_minority_fnr": 0.531469
+  },
+  "per_class": {
+    "BENIGN": {
+      "class_id": 0,
+      "support": 25478,
+      "precision": 0.972577,
+      "recall": 0.992503,
+      "f1": 0.982439,
+      "fnr": 0.007497,
+      "tp": 25287,
+      "fn": 191,
+      "fp": 713,
+      "tn": 3809,
+      "insufficient_test_support": false
+    },
+    "DoS": {
+      "class_id": 1,
+      "support": 2604,
+      "precision": 0.940611,
+      "recall": 0.863671,
+      "f1": 0.900501,
+      "fnr": 0.136329,
+      "tp": 2249,
+      "fn": 355,
+      "fp": 142,
+      "tn": 27254,
+      "insufficient_test_support": false
+    },
+    "DDoS": {
+      "class_id": 2,
+      "support": 1721,
+      "precision": 0.907331,
+      "recall": 0.762347,
+      "f1": 0.828544,
+      "fnr": 0.237653,
+      "tp": 1312,
+      "fn": 409,
+      "fp": 134,
+      "tn": 28145,
+      "insufficient_test_support": false
+    },
+    "PortScan": {
+      "class_id": 3,
+      "support": 26,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "fnr": 1.0,
+      "tp": 0,
+      "fn": 26,
+      "fp": 17,
+      "tn": 29957,
+      "insufficient_test_support": false
+    },
+    "BruteForce": {
+      "class_id": 4,
+      "support": 123,
+      "precision": 0.983051,
+      "recall": 0.943089,
+      "f1": 0.962656,
+      "fnr": 0.056911,
+      "tp": 116,
+      "fn": 7,
+      "fp": 2,
+      "tn": 29875,
+      "insufficient_test_support": false
+    },
+    "Botnet": {
+      "class_id": 5,
+      "support": 19,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "fnr": 1.0,
+      "tp": 0,
+      "fn": 19,
+      "fp": 0,
+      "tn": 29981,
+      "insufficient_test_support": false
+    },
+    "WebAttack": {
+      "class_id": 6,
+      "support": 29,
+      "precision": 0.964286,
+      "recall": 0.931034,
+      "f1": 0.947368,
+      "fnr": 0.068966,
+      "tp": 27,
+      "fn": 2,
+      "fp": 1,
+      "tn": 29970,
+      "insufficient_test_support": false
+    },
+    "Infiltration": {
+      "class_id": 7,
+      "support": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "fnr": null,
+      "tp": 0,
+      "fn": 0,
+      "fp": 0,
+      "tn": 30000,
+      "insufficient_test_support": true,
+      "note": "Zero test samples present in evaluation split."
+    }
+  },
+  "confusion_matrix": [
+    [
+      25287,
+      86,
+      85,
+      17,
+      2,
+      0,
+      1,
+      0
+    ],
+    [
+      306,
+      2249,
+      49,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      354,
+      55,
+      1312,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      25,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      7,
+      0,
+      0,
+      0,
+      116,
+      0,
+      0,
+      0
+    ],
+    [
+      19,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      27,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "timing": {
+    "training_time_seconds": 76.8309,
+    "inference_time_seconds": 0.0622,
+    "inference_latency_ms_per_1000": 2.0748
+  }
+}

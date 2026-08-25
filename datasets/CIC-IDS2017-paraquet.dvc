@@ -1,0 +1,6 @@
+outs:
+- md5: 1281ca808db2e1c854bdab18d72e61d8.dir
+  size: 270655555
+  nfiles: 8
+  hash: md5
+  path: CIC-IDS2017-paraquet

@@ -1,0 +1,169 @@
+{
+  "timestamp": "2026-08-17T09:00:59.886013+00:00",
+  "comparison": {
+    "models_evaluated": [
+      "random_forest",
+      "xgboost",
+      "mlp"
+    ],
+    "comparison_table": [
+      {
+        "model": "xgboost",
+        "macro_f1": 0.949033,
+        "mean_attack_fnr": 0.024115,
+        "macro_attack_f1": 0.940649,
+        "macro_attack_recall": 0.975885,
+        "mean_fnr": 0.020833,
+        "weighted_f1": 0.998939,
+        "accuracy": 0.998867,
+        "mean_minority_f1": 0.911765,
+        "mean_minority_fnr": 0.035931,
+        "train_time_sec": 31.1946,
+        "inference_latency_ms": 11.5949
+      },
+      {
+        "model": "random_forest",
+        "macro_f1": 0.898144,
+        "mean_attack_fnr": 0.043403,
+        "macro_attack_f1": 0.881562,
+        "macro_attack_recall": 0.956597,
+        "mean_fnr": 0.037763,
+        "weighted_f1": 0.996471,
+        "accuracy": 0.995967,
+        "mean_minority_f1": 0.825402,
+        "mean_minority_fnr": 0.063807,
+        "train_time_sec": 1.3732,
+        "inference_latency_ms": 2.4515
+      },
+      {
+        "model": "mlp",
+        "macro_f1": 0.660215,
+        "mean_attack_fnr": 0.416643,
+        "macro_attack_f1": 0.606511,
+        "macro_attack_recall": 0.583357,
+        "mean_fnr": 0.358193,
+        "weighted_f1": 0.96491,
+        "accuracy": 0.966367,
+        "mean_minority_f1": 0.477506,
+        "mean_minority_fnr": 0.531469,
+        "train_time_sec": 76.8309,
+        "inference_latency_ms": 2.0748
+      }
+    ],
+    "security_metric_rankings": {
+      "by_macro_f1": [
+        "xgboost",
+        "random_forest",
+        "mlp"
+      ],
+      "by_lowest_attack_fnr": [
+        "xgboost",
+        "random_forest",
+        "mlp"
+      ],
+      "by_macro_attack_f1": [
+        "xgboost",
+        "random_forest",
+        "mlp"
+      ],
+      "by_lowest_latency": [
+        "mlp",
+        "random_forest",
+        "xgboost"
+      ]
+    }
+  },
+  "recommendation": {
+    "provisional_champion": "xgboost",
+    "champion_summary": {
+      "accuracy": 0.998867,
+      "macro_f1": 0.949033,
+      "macro_precision": 0.932243,
+      "macro_recall": 0.979167,
+      "weighted_f1": 0.998939,
+      "weighted_precision": 0.999072,
+      "weighted_recall": 0.998867,
+      "mean_fnr": 0.020833,
+      "mean_attack_fnr": 0.024115,
+      "macro_attack_f1": 0.940649,
+      "macro_attack_recall": 0.975885,
+      "mean_minority_f1": 0.911765,
+      "mean_minority_fnr": 0.035931
+    },
+    "champion_timing": {
+      "training_time_seconds": 31.1946,
+      "inference_time_seconds": 0.3478,
+      "inference_latency_ms_per_1000": 11.5949
+    },
+    "reasoning": "Selected 'xgboost' as provisional champion based on multi-criteria security analysis. Macro F1 score of 0.9490 across 8 classes. Mean Attack FNR of 0.0241 (missed intrusion rate). Macro Attack F1 of 0.9406 on attack traffic. Weighted F1 of 0.9989 and overall Accuracy of 99.89%. Inference latency: 11.59 ms / 1,000 samples.",
+    "comparison_table": [
+      {
+        "model": "xgboost",
+        "macro_f1": 0.949033,
+        "mean_attack_fnr": 0.024115,
+        "macro_attack_f1": 0.940649,
+        "macro_attack_recall": 0.975885,
+        "mean_fnr": 0.020833,
+        "weighted_f1": 0.998939,
+        "accuracy": 0.998867,
+        "mean_minority_f1": 0.911765,
+        "mean_minority_fnr": 0.035931,
+        "train_time_sec": 31.1946,
+        "inference_latency_ms": 11.5949
+      },
+      {
+        "model": "random_forest",
+        "macro_f1": 0.898144,
+        "mean_attack_fnr": 0.043403,
+        "macro_attack_f1": 0.881562,
+        "macro_attack_recall": 0.956597,
+        "mean_fnr": 0.037763,
+        "weighted_f1": 0.996471,
+        "accuracy": 0.995967,
+        "mean_minority_f1": 0.825402,
+        "mean_minority_fnr": 0.063807,
+        "train_time_sec": 1.3732,
+        "inference_latency_ms": 2.4515
+      },
+      {
+        "model": "mlp",
+        "macro_f1": 0.660215,
+        "mean_attack_fnr": 0.416643,
+        "macro_attack_f1": 0.606511,
+        "macro_attack_recall": 0.583357,
+        "mean_fnr": 0.358193,
+        "weighted_f1": 0.96491,
+        "accuracy": 0.966367,
+        "mean_minority_f1": 0.477506,
+        "mean_minority_fnr": 0.531469,
+        "train_time_sec": 76.8309,
+        "inference_latency_ms": 2.0748
+      }
+    ],
+    "note": "Provisional recommendation for development phase. Formal champion-challenger promotion occurs in Governance Phase."
+  },
+  "final_champion_top40": {
+    "model_name": "xgboost_top40",
+    "features_count": 40,
+    "metrics_summary": {
+      "accuracy": 0.998967,
+      "macro_f1": 0.952917,
+      "macro_precision": 0.93728,
+      "macro_recall": 0.979184,
+      "weighted_f1": 0.999023,
+      "weighted_precision": 0.999127,
+      "weighted_recall": 0.998967,
+      "mean_fnr": 0.020816,
+      "mean_attack_fnr": 0.024115,
+      "macro_attack_f1": 0.945168,
+      "macro_attack_recall": 0.975885,
+      "mean_minority_f1": 0.918567,
+      "mean_minority_fnr": 0.035931
+    },
+    "timing": {
+      "training_time_seconds": 6.8249,
+      "inference_time_seconds": 0.0926,
+      "inference_latency_ms_per_1000": 3.0854
+    }
+  }
+}

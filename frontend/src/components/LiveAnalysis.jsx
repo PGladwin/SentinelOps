@@ -1,317 +1,233 @@
-import React, { useState } from "react";
-import { Shield, ShieldAlert, ShieldCheck, Zap, AlertTriangle, ArrowRight, CheckCircle2, TrendingUp, TrendingDown, Info, Play } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Activity, Check, Search, X as XIcon } from "lucide-react";
 import { postPredict } from "../api";
+import { useTheme } from "../theme-context";
+import { EmptyState, MetricCard, Panel, SectionHeader, StatusBadge } from "./ui";
 
-export default function LiveAnalysis({ demoSamples, onNewPrediction }) {
-  const [selectedSampleId, setSelectedSampleId] = useState(demoSamples[0]?.id || "");
+export default function LiveAnalysis({ demoSamples }) {
+  const { chart } = useTheme();
+  const [selectedId, setSelectedId] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  const selectedSample = demoSamples.find((s) => s.id === selectedSampleId) || demoSamples[0];
+  // demoSamples arrive asynchronously; seed the selection once they land.
+  useEffect(() => {
+    if (!selectedId && demoSamples.length) setSelectedId(demoSamples[0].id);
+  }, [demoSamples, selectedId]);
 
-  const handleAnalyze = async () => {
-    if (!selectedSample) return;
+  const sample = demoSamples.find((s) => s.id === selectedId) || demoSamples[0];
+
+  const analyze = async () => {
+    if (!sample) return;
     setAnalyzing(true);
     setError(null);
     try {
-      const pred = await postPredict(selectedSample.features);
-      setResult(pred);
-      if (onNewPrediction) {
-        onNewPrediction({
-          ...pred,
-          sampleId: selectedSample.id,
-          sampleLabel: selectedSample.label,
-          timestamp: new Date().toLocaleTimeString(),
-        });
-      }
+      setResult(await postPredict(sample.features));
     } catch (err) {
-      setError(err.message || "Failed to analyze traffic flow.");
+      setError(err.message);
     } finally {
       setAnalyzing(false);
     }
   };
 
+  const probabilities = result
+    ? Object.entries(result.probabilities).sort((a, b) => b[1] - a[1])
+    : [];
+
+  const raisingFeatures = result?.explanation?.filter((f) => f.increases_threat) || [];
+  const loweringFeatures = result?.explanation?.filter((f) => !f.increases_threat) || [];
+
+  const sampleIndex = demoSamples.findIndex((s) => s.id === selectedId);
+  const matchesGroundTruth = result && sample ? result.prediction === sample.label : null;
+
   return (
     <div className="space-y-6">
-      {/* Header Info */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5">
-            <Shield className="h-6 w-6 text-cyan-400" />
-            <span>Live Flow Analysis & SHAP Explainability</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            Select authentic CIC-IDS2017 network traffic and run real-time inference with TreeExplainer attribution.
-          </p>
-        </div>
-      </div>
+      <SectionHeader
+        eyebrow="Explain"
+        title="Single-Flow Scorer"
+        description="Score one flow in real time against the same /predict endpoint a SIEM or EDR integration would call, then see why."
+      />
 
-      {/* Traffic Selection & Action Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Sample Selector & Feature Snapshot */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-5 shadow-lg space-y-4">
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-              1. Select Demo Traffic Sample
-            </label>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Selector + verdict */}
+        <div className="lg:col-span-4 space-y-5">
+          <Panel title="Traffic sample" description="Reference flows held out from training — the label is withheld until you analyze.">
+            <div className="space-y-4">
+              <select
+                id="sample"
+                value={selectedId}
+                onChange={(e) => {
+                  setSelectedId(e.target.value);
+                  setResult(null);
+                  setError(null);
+                }}
+                className="w-full bg-canvas border border-line rounded-md px-3 py-2 text-sm text-ink focus:border-accent outline-none"
+              >
+                {demoSamples.map((s, i) => (
+                  <option key={s.id} value={s.id}>
+                    Traffic sample {i + 1}
+                  </option>
+                ))}
+              </select>
 
-            {/* Dropdown */}
-            <select
-              value={selectedSampleId}
-              onChange={(e) => {
-                setSelectedSampleId(e.target.value);
-                setResult(null);
-                setError(null);
-              }}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white font-medium focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none"
-            >
-              {demoSamples.map((sample) => (
-                <option key={sample.id} value={sample.id}>
-                  [{sample.label}] {sample.id} — {sample.description.substring(0, 45)}...
-                </option>
-              ))}
-            </select>
+              <button
+                onClick={analyze}
+                disabled={analyzing || !sample}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-accent text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
+              >
+                <Search className="h-3.5 w-3.5" />
+                {analyzing ? "Analyzing…" : "Analyze flow"}
+              </button>
 
-            {/* Selected Sample Meta */}
-            {selectedSample && (
-              <div className="p-3.5 rounded-lg bg-slate-950/80 border border-slate-800/80 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Dataset Ground Truth:</span>
-                  <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${
-                    selectedSample.label === "BENIGN"
-                      ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
-                      : "bg-rose-950 text-rose-400 border border-rose-800"
-                  }`}>
-                    {selectedSample.label}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block mb-0.5">Description:</span>
-                  <span className="text-slate-300 italic">{selectedSample.description}</span>
-                </div>
-                <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[11px]">
-                  <span className="text-slate-500">Feature Dimensions:</span>
-                  <span className="text-cyan-400 font-mono font-bold">40 Top Features</span>
-                </div>
-              </div>
-            )}
+              {error && <p className="text-xs text-danger">{error}</p>}
+            </div>
+          </Panel>
 
-            {/* Action Button */}
-            <button
-              onClick={handleAnalyze}
-              disabled={analyzing || !selectedSample}
-              className="w-full flex items-center justify-center space-x-2 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-sm shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all cursor-pointer"
-            >
-              {analyzing ? (
-                <>
-                  <div className="h-4 w-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
-                  <span>Evaluating Flow & Computing SHAP...</span>
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4 fill-current" />
-                  <span>ANALYZE TRAFFIC FLOW</span>
-                </>
-              )}
-            </button>
-
-            {error && (
-              <div className="p-3 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Sample Features Preview */}
-          {selectedSample && (
-            <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-4 space-y-2">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                Sample Top Features Snapshot
-              </span>
-              <div className="grid grid-cols-2 gap-2 text-[11px] font-mono max-h-48 overflow-y-auto pr-1">
-                {Object.entries(selectedSample.features).slice(0, 10).map(([k, v]) => (
-                  <div key={k} className="p-2 rounded bg-slate-950/60 border border-slate-800/50">
-                    <span className="text-slate-400 block truncate" title={k}>{k}</span>
-                    <span className="text-cyan-400 font-bold">{typeof v === 'number' ? v.toFixed(3) : v}</span>
+          {sample && (
+            <Panel title="Input features">
+              <dl className="space-y-1.5 text-xs max-h-64 overflow-y-auto pr-1">
+                {Object.entries(sample.features).slice(0, 12).map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-3">
+                    <dt className="text-muted truncate">{k}</dt>
+                    <dd className="font-mono tabular-nums text-ink shrink-0">
+                      {typeof v === "number" ? v.toLocaleString() : v}
+                    </dd>
                   </div>
                 ))}
+              </dl>
+              <p className="text-[11px] text-faint mt-3 pt-3 border-t border-line">
+                Showing 12 of {Object.keys(sample.features).length}
+              </p>
+            </Panel>
+          )}
+
+          {result && sample && (
+            <Panel title="Verdict">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <StatusBadge tone={result.is_attack ? "danger" : "safe"}>
+                    {result.prediction}
+                  </StatusBadge>
+                  <p className="text-[11px] text-faint mt-1.5">
+                    {result.is_attack ? "Malicious traffic" : "Benign traffic"}
+                  </p>
+                </div>
+                <MetricCard label="Confidence" value={`${(result.confidence * 100).toFixed(1)}%`} dense />
               </div>
-            </div>
+
+              <div className="mt-4 pt-4 border-t border-line space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-faint">Known label (sample {sampleIndex + 1})</span>
+                  <span className={sample.label === "BENIGN" ? "text-safe" : "text-danger"}>{sample.label}</span>
+                </div>
+                <div className={`flex items-center gap-1.5 text-xs ${matchesGroundTruth ? "text-safe" : "text-danger"}`}>
+                  {matchesGroundTruth ? <Check className="h-3.5 w-3.5" /> : <XIcon className="h-3.5 w-3.5" />}
+                  {matchesGroundTruth ? "Matches known label" : "Does not match known label"}
+                </div>
+                <p className="text-[11px] text-muted leading-relaxed pt-1">{sample.description}</p>
+              </div>
+            </Panel>
           )}
         </div>
 
-        {/* Right Column: Prediction Verdict & SHAP Explanation */}
-        <div className="lg:col-span-7 space-y-4">
-          {!result && !analyzing && (
-            <div className="rounded-xl bg-slate-900/40 border border-dashed border-slate-800 p-12 text-center flex flex-col items-center justify-center min-h-[380px]">
-              <div className="p-4 rounded-full bg-slate-900 text-slate-600 mb-3 border border-slate-800">
-                <Shield className="h-10 w-10" />
-              </div>
-              <h3 className="text-base font-bold text-slate-300">Ready for Live Analysis</h3>
-              <p className="text-xs text-slate-500 max-w-sm mt-1">
-                Select a network flow from the left and click "ANALYZE TRAFFIC FLOW" to run the Top-40 XGBoost Champion and inspect its SHAP explanation.
-              </p>
+        {/* Explanation */}
+        <div className="lg:col-span-8">
+          {!result ? (
+            <div className="card h-full min-h-[420px]">
+              <EmptyState
+                icon={Activity}
+                title="No analysis yet"
+                description="Select a flow on the left and run the analysis to see the verdict and its explanation."
+              />
             </div>
-          )}
-
-          {analyzing && (
-            <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-12 text-center flex flex-col items-center justify-center min-h-[380px] space-y-4">
-              <div className="relative">
-                <div className="h-14 w-14 rounded-full border-4 border-cyan-500/20 border-t-cyan-400 animate-spin"></div>
-                <Shield className="h-6 w-6 text-cyan-400 absolute inset-0 m-auto" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-white">Evaluating 40 Feature Dimensions</h4>
-                <p className="text-xs text-slate-400 mt-1">Generating multi-class probability scores & TreeExplainer attribution...</p>
-              </div>
-            </div>
-          )}
-
-          {result && !analyzing && (
-            <div className="space-y-4">
-              {/* Verdict Banner Card */}
-              <div className={`rounded-xl border p-5 shadow-xl transition-all ${
-                result.is_attack
-                  ? "bg-gradient-to-r from-rose-950/60 via-slate-900 to-slate-900 border-rose-500/50 shadow-rose-950/30"
-                  : "bg-gradient-to-r from-emerald-950/60 via-slate-900 to-slate-900 border-emerald-500/50 shadow-emerald-950/30"
-              }`}>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center space-x-3.5">
-                    <div className={`p-3 rounded-xl border ${
-                      result.is_attack
-                        ? "bg-rose-500/20 text-rose-400 border-rose-500/30 shadow-lg shadow-rose-500/20"
-                        : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-lg shadow-emerald-500/20"
-                    }`}>
-                      {result.is_attack ? <ShieldAlert className="h-8 w-8" /> : <ShieldCheck className="h-8 w-8" />}
-                    </div>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-xs font-black tracking-wider uppercase px-2 py-0.5 rounded ${
-                          result.is_attack ? "bg-rose-900/80 text-rose-300 border border-rose-700" : "bg-emerald-900/80 text-emerald-300 border border-emerald-700"
-                        }`}>
-                          {result.is_attack ? "THREAT DETECTED" : "BENIGN TRAFFIC"}
-                        </span>
-                        <span className="text-xs text-slate-400 font-mono">
-                          {(result.confidence * 100).toFixed(2)}% Confidence
-                        </span>
-                      </div>
-                      <h2 className="text-2xl font-black text-white mt-1 tracking-tight">
-                        {result.prediction}
-                      </h2>
-                    </div>
-                  </div>
-
-                  <div className="sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800 text-xs text-slate-400 font-mono">
-                    <p className="text-slate-300 font-semibold">{result.model}</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">{result.feature_count} features evaluated</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Class Probability Distribution */}
-              <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-4 space-y-3 shadow-lg">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                    Multiclass Probability Distribution
-                  </span>
-                  <span className="text-[11px] text-slate-500 font-mono">8 Target Classes</span>
-                </div>
-
-                <div className="space-y-2 text-xs font-mono">
-                  {Object.entries(result.probabilities)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([cls, prob]) => {
-                      const pct = (prob * 100).toFixed(2);
-                      const isSelected = cls === result.prediction;
-                      return (
-                        <div key={cls} className="space-y-1">
-                          <div className="flex justify-between text-[11px]">
-                            <span className={isSelected ? "font-bold text-cyan-300" : "text-slate-400"}>
-                              {cls} {isSelected && "★"}
-                            </span>
-                            <span className={isSelected ? "font-bold text-cyan-300" : "text-slate-500"}>
-                              {pct}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${
-                                isSelected
-                                  ? result.is_attack ? "bg-rose-500" : "bg-emerald-400"
-                                  : "bg-slate-700"
-                              }`}
-                              style={{ width: `${Math.max(prob * 100, 1)}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-
-              {/* SHAP Explanation Section: "WHY WAS THIS PREDICTED?" */}
-              <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-5 space-y-4 shadow-lg">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Info className="h-4 w-4 text-cyan-400" />
-                      <span>Why was this predicted? (SHAP Attribution)</span>
-                    </h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Top feature contributions from the XGBoost TreeExplainer for <span className="text-cyan-300 font-bold">{result.prediction}</span>
-                    </p>
-                  </div>
-                </div>
-
+          ) : (
+            <div className="space-y-5">
+              <Panel title="Class probabilities">
                 <div className="space-y-2.5">
-                  {result.explanation.map((item, idx) => {
-                    const isPositive = item.shap_value > 0;
+                  {probabilities.map(([cls, prob]) => {
+                    const isTop = cls === result.prediction;
                     return (
-                      <div
-                        key={idx}
-                        className="p-3 rounded-lg bg-slate-950/70 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-slate-700 transition-all text-xs"
-                      >
-                        <div className="space-y-0.5 min-w-[200px]">
-                          <div className="flex items-center space-x-1.5">
-                            <span className="font-semibold text-white">{item.feature}</span>
-                          </div>
-                          <div className="text-[11px] text-slate-400 font-mono">
-                            Actual Value: <span className="text-cyan-400 font-bold">{item.value}</span>
-                          </div>
+                      <div key={cls}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className={isTop ? "text-ink font-medium" : "text-muted"}>{cls}</span>
+                          <span className={`font-mono tabular-nums ${isTop ? "text-ink" : "text-faint"}`}>
+                            {(prob * 100).toFixed(2)}%
+                          </span>
                         </div>
-
-                        <div className="flex items-center space-x-3 sm:justify-end">
-                          <div className="text-right font-mono">
-                            <span className={`font-bold ${isPositive ? "text-rose-400" : "text-emerald-400"}`}>
-                              {isPositive ? `+${item.shap_value.toFixed(4)}` : item.shap_value.toFixed(4)}
-                            </span>
-                          </div>
-
-                          <div className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 ${
-                            isPositive
-                              ? "bg-rose-950/80 text-rose-300 border border-rose-800/80"
-                              : "bg-emerald-950/80 text-emerald-300 border border-emerald-800/80"
-                          }`}>
-                            {isPositive ? (
-                              <>
-                                <TrendingUp className="h-3 w-3" />
-                                <span>Increases Threat Risk</span>
-                              </>
-                            ) : (
-                              <>
-                                <TrendingDown className="h-3 w-3" />
-                                <span>Decreases Threat Risk</span>
-                              </>
-                            )}
-                          </div>
+                        <div className="h-1 rounded-full bg-elevated overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${Math.max(prob * 100, 0.5)}%`,
+                              backgroundColor: isTop
+                                ? result.is_attack ? chart.danger : chart.safe
+                                : chart.grid,
+                            }}
+                          />
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
+              </Panel>
+
+              <Panel
+                title="Why this verdict"
+                description={`Feature contributions toward the predicted class, ${result.prediction}`}
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                  <div className="rounded-md border border-danger/25 bg-danger-soft px-3.5 py-3">
+                    <p className="text-[11px] font-medium text-danger">Pushed toward threat</p>
+                    <p className="text-[11px] text-muted mt-1 leading-relaxed">
+                      {raisingFeatures.length
+                        ? `${raisingFeatures.length} feature(s) increased the model's estimated threat probability.`
+                        : "No feature pushed this prediction toward a higher threat."}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-safe/25 bg-safe-soft px-3.5 py-3">
+                    <p className="text-[11px] font-medium text-safe">Pushed toward benign</p>
+                    <p className="text-[11px] text-muted mt-1 leading-relaxed">
+                      {loweringFeatures.length
+                        ? `${loweringFeatures.length} feature(s) pushed the prediction toward benign.`
+                        : "No feature pushed this prediction toward benign."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {result.explanation.map((item) => {
+                    const raises = item.increases_threat ?? item.shap_value > 0;
+                    const max = Math.max(
+                      ...result.explanation.map((e) => Math.abs(e.shap_value)),
+                      1e-4
+                    );
+                    const width = (Math.abs(item.shap_value) / max) * 100;
+                    return (
+                      <div key={item.feature} className="grid grid-cols-12 gap-3 items-center">
+                        <span className="col-span-4 text-xs text-ink truncate">{item.feature}</span>
+                        <span className="col-span-2 text-xs font-mono tabular-nums text-faint text-right">
+                          {item.value}
+                        </span>
+                        <div className="col-span-4 h-1.5 rounded-full bg-elevated overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${raises ? "bg-danger" : "bg-safe"}`}
+                            style={{ width: `${width}%` }}
+                          />
+                        </div>
+                        <span className={`col-span-2 text-xs font-mono tabular-nums text-right ${raises ? "text-danger" : "text-safe"}`}>
+                          {item.shap_value > 0 ? "+" : ""}{item.shap_value.toFixed(3)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <p className="text-[11px] text-faint mt-4 pt-4 border-t border-line leading-relaxed">
+                  Red raises threat, green lowers it. Direction accounts for the predicted
+                  class, so on a benign verdict a positive SHAP value lowers threat.
+                </p>
+              </Panel>
             </div>
           )}
         </div>

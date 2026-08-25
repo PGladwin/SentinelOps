@@ -1,0 +1,28 @@
+{
+  "model_type": "random_forest",
+  "hyperparameters": {
+    "n_estimators": 100,
+    "max_depth": 20,
+    "min_samples_leaf": 2,
+    "n_jobs": -1,
+    "class_weight": "balanced"
+  },
+  "feature_set": "Phase1_48_features",
+  "feature_count": 48,
+  "random_seed": 42,
+  "training_dataset_identifier": "data/processed/train.parquet",
+  "training_row_count": 119996,
+  "test_row_count": 30000,
+  "class_mapping": {
+    "BENIGN": 0,
+    "DoS": 1,
+    "DDoS": 2,
+    "PortScan": 3,
+    "BruteForce": 4,
+    "Botnet": 5,
+    "WebAttack": 6,
+    "Infiltration": 7
+  },
+  "training_time_seconds": 1.3732,
+  "creation_timestamp": "2026-08-17T08:57:11.484484+00:00"
+}

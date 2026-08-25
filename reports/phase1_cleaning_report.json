@@ -1,0 +1,33 @@
+{
+  "input_rows": 2313810,
+  "input_cols": 79,
+  "class_distribution": {
+    "BENIGN": 1977318,
+    "DoS": 193756,
+    "DDoS": 128014,
+    "BruteForce": 9150,
+    "WebAttack": 2143,
+    "PortScan": 1956,
+    "Botnet": 1437,
+    "Infiltration": 36
+  },
+  "inf_replacement": {
+    "total_inf_replaced": 0,
+    "columns": {}
+  },
+  "nan_after_inf_replacement": 0,
+  "duplicates_dropped": 82004,
+  "constant_cols_dropped": [
+    "Bwd PSH Flags",
+    "Bwd URG Flags",
+    "Fwd Avg Bytes/Bulk",
+    "Fwd Avg Packets/Bulk",
+    "Fwd Avg Bulk Rate",
+    "Bwd Avg Bytes/Bulk",
+    "Bwd Avg Packets/Bulk",
+    "Bwd Avg Bulk Rate"
+  ],
+  "output_rows": 2231806,
+  "output_cols": 72,
+  "rows_removed": 82004
+}

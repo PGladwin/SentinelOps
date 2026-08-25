@@ -51,6 +51,28 @@ def _load_single_parquet(path: str | Path) -> pd.DataFrame:
     return df
 
 
+
+def _count_inf_nan(df: pd.DataFrame) -> tuple[int, int]:
+    """
+    Count Inf and NaN across numeric columns without materialising a full
+    float64 copy of the frame.
+
+    The obvious `np.isinf(df.select_dtypes(...).values.astype(float))` builds a
+    dense float64 array of the whole dataset -- ~1.3 GB on the full CIC-IDS2017
+    corpus, on top of the frame itself. Iterating column-wise keeps the peak to
+    one column at a time, and integer columns are skipped entirely since they
+    cannot hold Inf or NaN.
+    """
+    inf_count = 0
+    nan_count = 0
+    for col in df.select_dtypes(include=[np.number]).columns:
+        values = df[col].to_numpy(copy=False)
+        if np.issubdtype(values.dtype, np.floating):
+            inf_count += int(np.isinf(values).sum())
+            nan_count += int(np.isnan(values).sum())
+    return inf_count, nan_count
+
+
 def _inspect_labels(df: pd.DataFrame, source_name: str) -> dict:
     """
     Inspect the Label column of a single file.
@@ -144,14 +166,14 @@ def load_all_parquet(params: dict) -> tuple[pd.DataFrame, dict]:
         # Inspect labels
         label_report = _inspect_labels(df, fname)
 
-        # Count Inf and NaN in numeric columns
-        num_df = df.select_dtypes(include=[np.number])
-        inf_count = int(np.isinf(num_df.values.astype(float)).sum())
-        nan_count = int(num_df.isna().sum().sum())
+        # Count Inf and NaN in numeric columns (column-wise, see _count_inf_nan)
+        inf_count, nan_count = _count_inf_nan(df)
         label_nan_count = int(df["Label"].isna().sum())
 
         # Constant numeric columns in this file
+        num_df = df.select_dtypes(include=[np.number])
         const_cols = num_df.columns[num_df.std() == 0].tolist()
+        del num_df
 
         file_report = {
             "file": fname,
@@ -178,6 +200,9 @@ def load_all_parquet(params: dict) -> tuple[pd.DataFrame, dict]:
     logger.info("Combining all files...")
     combined_df = pd.concat(file_dfs, axis=0, ignore_index=True)
 
+    # Release the per-file frames; the concat already copied their contents.
+    file_dfs.clear()
+
     total_rows = len(combined_df)
     logger.info(f"Combined total: {total_rows:,} rows")
 
@@ -185,19 +210,12 @@ def load_all_parquet(params: dict) -> tuple[pd.DataFrame, dict]:
     # 4. Collect combined stats
     # -----------------------------------------------------------------
     all_raw_labels = combined_df["Label"].value_counts().to_dict()
-    combined_inf = int(
-        np.isinf(
-            combined_df.select_dtypes(include=[np.number])
-            .values.astype(float)
-        ).sum()
-    )
-    combined_nan = int(
-        combined_df.select_dtypes(include=[np.number]).isna().sum().sum()
-    )
+    combined_inf, combined_nan = _count_inf_nan(combined_df)
 
     # Collect constant columns across the combined dataset
     combined_num = combined_df.select_dtypes(include=[np.number])
     combined_const_cols = combined_num.columns[combined_num.std() == 0].tolist()
+    del combined_num
 
     report = {
         "parquet_dir": str(parquet_dir.resolve()),

@@ -1,0 +1,33 @@
+{
+  "model_type": "mlp",
+  "hyperparameters": {
+    "hidden_layers": [
+      128,
+      64,
+      32
+    ],
+    "dropout_rate": 0.3,
+    "batch_size": 512,
+    "max_epochs": 50,
+    "learning_rate": 0.001,
+    "early_stopping_patience": 5
+  },
+  "feature_set": "Phase1_48_features",
+  "feature_count": 48,
+  "random_seed": 42,
+  "training_dataset_identifier": "data/processed/train.parquet",
+  "training_row_count": 119996,
+  "test_row_count": 30000,
+  "class_mapping": {
+    "BENIGN": 0,
+    "DoS": 1,
+    "DDoS": 2,
+    "PortScan": 3,
+    "BruteForce": 4,
+    "Botnet": 5,
+    "WebAttack": 6,
+    "Infiltration": 7
+  },
+  "training_time_seconds": 76.8309,
+  "creation_timestamp": "2026-08-17T08:59:01.565180+00:00"
+}

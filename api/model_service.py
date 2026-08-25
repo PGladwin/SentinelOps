@@ -2,11 +2,18 @@
 SentinelOps API - Model Inference & Explanation Service
 =======================================================
 Singleton model service that:
-  - Loads the Phase 2 Top-40 XGBoost Champion model and its metadata
-  - Verifies exact 40-feature ordering
+  - Loads whichever Champion governance promoted, its metadata, and the
+    raw -> scaled inference bundle
+  - Accepts RAW network-flow features and preprocesses them exactly as Phase 1
+    did (alias resolution, median fill, RobustScaler) before inference
   - Computes multiclass probabilities
   - Generates true SHAP local explanations via TreeExplainer
-  - Serves genuine CIC-IDS2017 test dataset demo samples
+  - Serves a pre-baked bank of genuine CIC-IDS2017 demo flows
+  - Powers the SOC /analyze endpoint over uploaded CSV files
+
+Input contract:
+  All feature values are RAW, in the units of the source dataset (packet
+  counts, byte rates, microsecond durations). Scaling happens server-side.
 """
 
 import io
@@ -19,23 +26,42 @@ import numpy as np
 import pandas as pd
 import shap
 
+from api.config import settings
+from src.data.inference_prep import (
+    extract_labels,
+    load_inference_bundle,
+    normalize_columns,
+    prepare_for_champion,
+    prepare_with_report,
+)
+from src.models.demo_samples import load_demo_samples
 from src.models.train import load_champion_model
 
 logger = logging.getLogger("sentinelops.api")
+
+# Confidence histogram buckets used by the SOC dashboard.
+CONFIDENCE_BINS: list[tuple[float, float]] = [
+    (0.0, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0001),
+]
 
 
 class ModelService:
     _instance: Optional["ModelService"] = None
 
-    def __init__(self, models_dir: str = "models", data_dir: str = "data/processed"):
-        self.models_dir = Path(models_dir)
-        self.data_dir = Path(data_dir)
+    def __init__(
+        self,
+        models_dir: str | Path | None = None,
+        data_dir: str | Path | None = None,
+    ):
+        self.models_dir = Path(models_dir) if models_dir else settings.models_dir
+        self.data_dir = Path(data_dir) if data_dir else settings.processed_dir
         self.model: Any = None
         self.feature_names: list[str] = []
         self.metadata: dict[str, Any] = {}
         self.class_encoding: dict[str, int] = {}
         self.inverse_encoding: dict[int, str] = {}
         self.explainer: Optional[shap.TreeExplainer] = None
+        self.bundle: dict[str, Any] = {}
         self.demo_samples: list[dict[str, Any]] = []
 
         self._load_artifacts()
@@ -48,101 +74,64 @@ class ModelService:
             cls._instance = ModelService()
         return cls._instance
 
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Drop the cached singleton. Used by tests that reload artifacts."""
+        cls._instance = None
+
+    # ------------------------------------------------------------------
+    # Startup
+    # ------------------------------------------------------------------
+
     def _load_artifacts(self) -> None:
-        """Load Champion model, ordered 40 features, metadata, and class mappings."""
+        """Load Champion model, ordered features, metadata, and the raw-input bundle."""
         logger.info(f"Loading Champion artifacts from: {self.models_dir.resolve()}")
         self.model, self.feature_names, self.metadata = load_champion_model(self.models_dir)
 
-        if len(self.feature_names) != 40:
+        if not self.feature_names:
+            raise ValueError("Champion feature list is empty; artifacts are corrupt.")
+
+        # Deliberately no hardcoded feature count: governance may promote a
+        # model built on any feature set, and the serving layer must follow
+        # whatever was approved rather than assume the Top-40 variant won.
+        self.bundle = load_inference_bundle(self.models_dir / "champion_preprocessor.json")
+        if self.bundle["feature_names"] != self.feature_names:
             raise ValueError(
-                f"Expected exactly 40 features for Top-40 Champion, but found {len(self.feature_names)}"
+                "Inference bundle feature order does not match the Champion feature list. "
+                "Regenerate models/champion_preprocessor.json via run_phase2.py."
             )
 
         self.class_encoding = self.metadata.get("class_mapping", {})
         if not self.class_encoding:
-            # Fallback to processed dir
             enc_path = self.data_dir / "class_encoding.json"
             if enc_path.exists():
                 with open(enc_path, "r", encoding="utf-8") as f:
                     self.class_encoding = json.load(f)
 
         self.inverse_encoding = {int(v): k for k, v in self.class_encoding.items()}
-        logger.info(f"Model service initialized: {self.metadata.get('model_name', 'xgboost_top40')}")
+        logger.info(
+            f"Model service initialized: {self.metadata.get('model_name', 'xgboost_top40')} "
+            f"({len(self.feature_names)} raw features, {len(self.class_encoding)} classes)"
+        )
 
     def _init_explainer(self) -> None:
-        """Initialize TreeExplainer for SHAP on the Top-40 XGBoost Champion."""
+        """Initialize TreeExplainer for SHAP on the promoted Champion."""
         logger.info("Initializing SHAP TreeExplainer for real-time inference explanations...")
         self.explainer = shap.TreeExplainer(self.model)
 
     def _load_demo_samples(self) -> None:
-        """Extract genuine representative traffic flows from the test dataset."""
-        test_path = self.data_dir / "test.parquet"
-        if not test_path.exists():
-            logger.warning(f"Test parquet not found at {test_path}; demo samples will be empty.")
-            return
+        """
+        Load the pre-baked demo bank.
 
-        test_df = pd.read_parquet(test_path)
-        samples = []
+        Deliberately does NOT read test.parquet: at full-dataset scale that is
+        ~446k rows and would exhaust a small container at startup.
+        """
+        self.demo_samples = load_demo_samples(self.models_dir / "demo_samples.json")
+        logger.info(f"Loaded {len(self.demo_samples)} genuine demo traffic samples.")
 
-        # Available classes in test set: BENIGN, DoS, DDoS, PortScan, BruteForce, Botnet, WebAttack
-        demo_specs = [
-            {
-                "id": "benign_flow_01",
-                "target_class": "BENIGN",
-                "description": "Legitimate HTTPS browsing & DNS query traffic (Standard enterprise baseline)",
-            },
-            {
-                "id": "dos_hulk_01",
-                "target_class": "DoS",
-                "description": "DoS HTTP Flood Attack (High-frequency GET requests with randomized headers)",
-            },
-            {
-                "id": "ddos_loic_01",
-                "target_class": "DDoS",
-                "description": "Volumetric DDoS Attack (Distributed packet flood targeting network gateway)",
-            },
-            {
-                "id": "portscan_syn_01",
-                "target_class": "PortScan",
-                "description": "Reconnaissance Port Scan (Sequential SYN probes sweeping open service ports)",
-            },
-            {
-                "id": "bruteforce_ssh_01",
-                "target_class": "BruteForce",
-                "description": "SSH Authentication Brute-Force (Automated credential dictionary attack)",
-            },
-            {
-                "id": "botnet_ares_01",
-                "target_class": "Botnet",
-                "description": "Botnet C2 Beaconing (Periodic command-and-control heartbeat communication)",
-            },
-            {
-                "id": "webattack_xss_01",
-                "target_class": "WebAttack",
-                "description": "Web Application Exploit / XSS Injection (Cross-site scripting payload delivery)",
-            },
-            {
-                "id": "benign_flow_02",
-                "target_class": "BENIGN",
-                "description": "Standard FTP File Transfer session (Benign internal file server communication)",
-            },
-        ]
-
-        for spec in demo_specs:
-            match = test_df[test_df["label_class"] == spec["target_class"]]
-            if len(match) > 0:
-                row = match.iloc[0]
-                # Extract only the 40 required features
-                feat_dict = {f: float(row[f]) for f in self.feature_names}
-                samples.append({
-                    "id": spec["id"],
-                    "label": spec["target_class"],
-                    "description": spec["description"],
-                    "features": feat_dict,
-                })
-
-        self.demo_samples = samples
-        logger.info(f"Loaded {len(self.demo_samples)} genuine demo traffic samples from CIC-IDS2017 test set.")
+    # ------------------------------------------------------------------
+    # Introspection
+    # ------------------------------------------------------------------
 
     def get_health(self) -> dict[str, Any]:
         """Return service health and loaded model status."""
@@ -151,10 +140,13 @@ class ModelService:
             "model_loaded": self.model is not None,
             "model": "XGBoost Champion",
             "feature_count": len(self.feature_names),
+            "model_version": str(self.metadata.get("version", self.metadata.get("model_name", "xgboost_top40"))),
+            "stage": str(self.metadata.get("stage", self.metadata.get("status", "provisional_champion"))),
+            "input_contract": "raw",
         }
 
     def get_model_info(self) -> dict[str, Any]:
-        """Return detailed metadata about the Champion model and feature representation."""
+        """Return detailed metadata about the Champion and feature representation."""
         return {
             "model_name": self.metadata.get("model_name", "xgboost_top40"),
             "model_type": self.metadata.get("model_type", "XGBoost (Multiclass Tree Ensemble)"),
@@ -168,33 +160,109 @@ class ModelService:
         """Return the pre-loaded genuine demo samples."""
         return self.demo_samples
 
+    # ------------------------------------------------------------------
+    # Explanation helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _increases_threat(shap_value: float, is_attack: bool) -> bool:
+        """
+        Decide whether a contribution raises threat, not merely whether it
+        supports the predicted class.
+
+        SHAP values are signed relative to the PREDICTED class. When the
+        prediction is BENIGN, a positive value argues for benign traffic and
+        therefore lowers threat. The previous implementation reported any
+        positive value as 'increases risk', which inverted the meaning of
+        every benign explanation.
+        """
+        return shap_value > 0 if is_attack else shap_value < 0
+
+    def _explain_row(
+        self,
+        shap_row: np.ndarray,
+        raw_values: dict[str, float] | np.ndarray,
+        is_attack: bool,
+        top_k: int,
+    ) -> list[dict[str, Any]]:
+        """Build the top-k ranked SHAP contribution records for one flow."""
+        top_indices = np.argsort(np.abs(shap_row))[::-1][:top_k]
+
+        explanation = []
+        for idx in top_indices:
+            idx = int(idx)
+            feat_name = self.feature_names[idx]
+            if isinstance(raw_values, dict):
+                feat_val = float(raw_values[feat_name])
+            else:
+                feat_val = float(raw_values[idx])
+
+            s_val = float(shap_row[idx])
+            raises = self._increases_threat(s_val, is_attack)
+
+            explanation.append({
+                "feature": feat_name,
+                "value": round(feat_val, 4),
+                "shap_value": round(s_val, 6),
+                "increases_threat": raises,
+                "direction": "increases threat" if raises else "decreases threat",
+            })
+        return explanation
+
+    def _shap_for_matrix(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Compute SHAP values for a scaled matrix.
+
+        Returns
+        -------
+        values : np.ndarray
+            Shape (n_rows, n_features, n_classes) for multiclass, or
+            (n_rows, n_features) when the explainer collapses the class axis.
+        base_values : np.ndarray
+            Per-class expected values.
+        """
+        explanation = self.explainer(X)
+        base = np.asarray(explanation.base_values)
+        return np.asarray(explanation.values), base
+
+    # ------------------------------------------------------------------
+    # Single-flow prediction
+    # ------------------------------------------------------------------
+
     def predict_single(self, features: dict[str, float]) -> dict[str, Any]:
         """
-        Run prediction, probability estimation, and SHAP explanation for a single flow.
+        Run prediction, probability estimation, and SHAP explanation on one RAW flow.
 
         Parameters
         ----------
         features : dict[str, float]
-            Mapping of 40 feature names to values.
+            Mapping of the 40 Champion feature names to RAW values.
 
         Returns
         -------
-        result : dict[str, Any]
+        dict[str, Any]
         """
-        # Validate that all 40 required features are present
         missing = set(self.feature_names) - set(features.keys())
         if missing:
-            raise ValueError(f"Missing required feature(s): {list(missing)[:5]} ({len(missing)} missing)")
+            raise ValueError(
+                f"Missing required feature(s): {sorted(missing)[:5]} ({len(missing)} missing)"
+            )
 
-        # Construct 1D vector in exact feature order
-        feature_vector = np.array(
-            [[features[f] for f in self.feature_names]],
-            dtype=np.float32,
-        )
+        non_finite = [
+            f for f in self.feature_names
+            if not np.isfinite(np.asarray(features[f], dtype=np.float64))
+        ]
+        if non_finite:
+            raise ValueError(
+                f"Non-finite value(s) supplied for: {non_finite[:5]} "
+                f"({len(non_finite)} total). Provide finite numeric values."
+            )
 
-        # Run model inference
-        pred_int = int(self.model.predict(feature_vector)[0])
+        raw_df = pd.DataFrame([{f: features[f] for f in self.feature_names}])
+        feature_vector = prepare_for_champion(raw_df, self.bundle, already_normalized=True)
+
         probabilities = self.model.predict_proba(feature_vector)[0]
+        pred_int = int(np.argmax(probabilities))
 
         pred_class = self.inverse_encoding.get(pred_int, f"Class_{pred_int}")
         confidence = float(probabilities[pred_int])
@@ -205,35 +273,18 @@ class ModelService:
             for i, prob in enumerate(probabilities)
         }
 
-        # Calculate SHAP explanation for this sample
-        shap_explanation = []
+        shap_explanation: list[dict[str, Any]] = []
+        base_value = 0.0
         if self.explainer is not None:
-            shap_vals = self.explainer(feature_vector)
-            raw_vals = shap_vals.values  # (1, 40, 8) or (1, 40)
-
+            raw_vals, base_vals = self._shap_for_matrix(feature_vector)
             if raw_vals.ndim == 3:
-                sample_shap = raw_vals[0, :, pred_int]
+                shap_row = raw_vals[0, :, pred_int]
+                base_value = float(np.ravel(base_vals)[pred_int]) if base_vals.size > 1 else float(np.ravel(base_vals)[0])
             else:
-                sample_shap = raw_vals[0, :]
+                shap_row = raw_vals[0, :]
+                base_value = float(np.ravel(base_vals)[0])
 
-            # Select top 7 influential features by magnitude
-            top_indices = np.argsort(np.abs(sample_shap))[::-1][:7]
-
-            for idx in top_indices:
-                feat_name = self.feature_names[idx]
-                feat_val = float(features[feat_name])
-                s_val = float(sample_shap[idx])
-                direction = (
-                    "increases risk/probability"
-                    if s_val > 0
-                    else "decreases risk/probability"
-                )
-                shap_explanation.append({
-                    "feature": feat_name,
-                    "value": round(feat_val, 4),
-                    "shap_value": round(s_val, 6),
-                    "direction": direction,
-                })
+            shap_explanation = self._explain_row(shap_row, features, is_attack, top_k=7)
 
         return {
             "prediction": pred_class,
@@ -242,62 +293,217 @@ class ModelService:
             "probabilities": prob_dict,
             "model": "XGBoost Champion (Top-40)",
             "feature_count": len(self.feature_names),
+            "base_value": round(base_value, 6),
             "explanation": shap_explanation,
         }
 
-    def predict_batch(self, file_content: bytes, filename: str) -> dict[str, Any]:
+    # ------------------------------------------------------------------
+    # SOC analysis
+    # ------------------------------------------------------------------
+
+    def _read_csv(self, file_content: bytes) -> pd.DataFrame:
+        """Parse uploaded CSV bytes, enforcing size and row guardrails."""
+        if len(file_content) > settings.max_upload_bytes:
+            raise ValueError(
+                f"Uploaded file is {len(file_content) / 1024 / 1024:.1f} MB, exceeding the "
+                f"{settings.max_upload_bytes / 1024 / 1024:.0f} MB limit."
+            )
+        try:
+            df = pd.read_csv(io.BytesIO(file_content), low_memory=False)
+        except Exception as e:
+            raise ValueError(f"Could not parse CSV: {e}")
+
+        if df.empty:
+            raise ValueError("Uploaded CSV contains no data rows.")
+
+        if len(df) > settings.max_analysis_rows:
+            logger.warning(
+                f"Upload has {len(df):,} rows; truncating to {settings.max_analysis_rows:,}."
+            )
+            df = df.head(settings.max_analysis_rows)
+        return df
+
+    def _threat_level(self, attack_rate: float, thresholds: dict[str, float]) -> str:
+        """Map an attack rate to a HIGH / MEDIUM / LOW banner."""
+        if attack_rate >= thresholds.get("high", 0.20):
+            return "HIGH"
+        if attack_rate >= thresholds.get("medium", 0.05):
+            return "MEDIUM"
+        return "LOW"
+
+    def analyze_csv(
+        self,
+        file_content: bytes,
+        filename: str,
+        thresholds: dict[str, float] | None = None,
+    ) -> dict[str, Any]:
         """
-        Run batch prediction on uploaded CSV file.
+        Full SOC analysis of an uploaded RAW traffic CSV.
+
+        Classifies every flow, computes batched SHAP attributions, and returns
+        dashboard-ready aggregates alongside per-row detail.
 
         Parameters
         ----------
         file_content : bytes
             Raw CSV bytes.
         filename : str
-            Name of uploaded file.
+            Original filename, echoed back in the summary.
+        thresholds : dict, optional
+            Attack-rate cutoffs for the threat-level banner.
 
         Returns
         -------
-        batch_results : dict[str, Any]
+        dict[str, Any]
         """
-        try:
-            df = pd.read_csv(io.BytesIO(file_content))
-        except Exception as e:
-            raise ValueError(f"Could not parse CSV: {e}")
+        thresholds = thresholds or {"high": 0.20, "medium": 0.05}
 
-        # Check required columns
-        missing = set(self.feature_names) - set(df.columns)
-        if missing:
-            raise ValueError(
-                f"CSV is missing {len(missing)} required feature columns. "
-                f"Missing examples: {list(missing)[:5]}"
-            )
+        df = self._read_csv(file_content)
+        df = normalize_columns(df)
+        truth = extract_labels(df)
 
-        # Align columns
-        X_batch = df[self.feature_names].values.astype(np.float32)
+        # allow_missing: real exports vary in schema. Absent columns are
+        # imputed from training medians and reported back, so a degraded
+        # analysis is visible rather than silently presented as clean.
+        X, prep_report = prepare_with_report(
+            df, self.bundle, already_normalized=True, allow_missing=True
+        )
+        n_rows = len(X)
 
-        preds_int = self.model.predict(X_batch)
-        probs_all = self.model.predict_proba(X_batch)
+        probs_all = self.model.predict_proba(X)
+        preds_int = probs_all.argmax(axis=1)
+        confidences = probs_all.max(axis=1)
+        pred_names = np.array(
+            [self.inverse_encoding.get(int(p), f"Class_{p}") for p in preds_int]
+        )
+        is_attack_arr = pred_names != "BENIGN"
 
-        prediction_counts: dict[str, int] = {
-            self.inverse_encoding[i]: 0 for i in range(len(self.inverse_encoding))
-        }
+        # ---- SHAP over the batch (capped) ----------------------------
+        shap_rows = min(n_rows, settings.max_shap_rows)
+        global_shap: list[dict[str, Any]] = []
+        per_row_shap: Optional[np.ndarray] = None
 
-        row_results = []
-        for idx, (p_int, probs) in enumerate(zip(preds_int, probs_all)):
-            p_class = self.inverse_encoding.get(int(p_int), f"Class_{p_int}")
-            conf = float(probs[p_int])
-            prediction_counts[p_class] = prediction_counts.get(p_class, 0) + 1
+        if self.explainer is not None and shap_rows > 0:
+            values, _ = self._shap_for_matrix(X[:shap_rows])
+            if values.ndim == 3:
+                mean_abs = np.mean(np.abs(values), axis=(0, 2))
+                per_row_shap = values[np.arange(shap_rows), :, preds_int[:shap_rows]]
+            else:
+                mean_abs = np.mean(np.abs(values), axis=0)
+                per_row_shap = values
 
-            row_results.append({
-                "flow_id": idx + 1,
-                "prediction": p_class,
-                "confidence": round(conf, 4),
-                "is_attack": p_class != "BENIGN",
+            order = np.argsort(mean_abs)[::-1][:20]
+            global_shap = [
+                {
+                    "rank": int(r + 1),
+                    "feature": self.feature_names[int(i)],
+                    "mean_abs_shap": float(round(mean_abs[int(i)], 6)),
+                }
+                for r, i in enumerate(order)
+            ]
+
+        # ---- Per-row records -----------------------------------------
+        returned = min(n_rows, settings.max_returned_rows)
+        # Raw (unscaled) values for display alongside SHAP contributions.
+        # reindex rather than .loc so imputed columns do not raise; they are
+        # backfilled with the same training medians used for inference.
+        raw_display = df.reindex(columns=self.feature_names)
+        raw_display = raw_display.apply(pd.to_numeric, errors="coerce")
+        raw_display = raw_display.fillna(
+            value={f: self.bundle["fill_values"][f] for f in self.feature_names}
+        )
+        raw_features = raw_display.to_numpy(dtype=np.float64, na_value=np.nan)
+
+        rows = []
+        for i in range(returned):
+            explanation = []
+            if per_row_shap is not None and i < shap_rows:
+                explanation = self._explain_row(
+                    per_row_shap[i], raw_features[i], bool(is_attack_arr[i]), top_k=3
+                )
+            rows.append({
+                "flow_id": i + 1,
+                "prediction": str(pred_names[i]),
+                "confidence": round(float(confidences[i]), 4),
+                "is_attack": bool(is_attack_arr[i]),
+                "top_features": explanation,
             })
 
-        return {
-            "total_samples": len(df),
-            "prediction_counts": prediction_counts,
-            "predictions": row_results,
+        # ---- Aggregates ----------------------------------------------
+        class_breakdown = {self.inverse_encoding[i]: 0 for i in sorted(self.inverse_encoding)}
+        names, counts = np.unique(pred_names, return_counts=True)
+        for name, count in zip(names, counts):
+            class_breakdown[str(name)] = int(count)
+
+        total_attacks = int(is_attack_arr.sum())
+        attack_rate = total_attacks / n_rows if n_rows else 0.0
+
+        histogram = [
+            {
+                "bucket": f"{lo:.0%}-{min(hi, 1.0):.0%}",
+                "count": int(((confidences >= lo) & (confidences < hi)).sum()),
+            }
+            for lo, hi in CONFIDENCE_BINS
+        ]
+
+        top_suspicious = sorted(
+            [r for r in rows if r["is_attack"]],
+            key=lambda r: -r["confidence"],
+        )[:10]
+
+        summary: dict[str, Any] = {
+            "filename": filename,
+            "threat_level": self._threat_level(attack_rate, thresholds),
+            "total_connections": n_rows,
+            "total_attacks": total_attacks,
+            "total_benign": n_rows - total_attacks,
+            "attack_rate": round(attack_rate, 6),
+            "rows_returned": returned,
+            "rows_explained": shap_rows,
+            "truncated": returned < n_rows,
+            "imputed_columns": prep_report["imputed_columns"],
+            "n_imputed_columns": prep_report["n_imputed_columns"],
         }
+
+        # Optional: if the upload carried ground truth, report real accuracy.
+        if truth is not None:
+            summary["ground_truth_available"] = True
+            summary["ground_truth_accuracy"] = self._score_against_truth(truth, pred_names)
+        else:
+            summary["ground_truth_available"] = False
+
+        return {
+            "summary": summary,
+            "class_breakdown": class_breakdown,
+            "confidence_histogram": histogram,
+            "top_suspicious": top_suspicious,
+            "global_shap": global_shap,
+            "rows": rows,
+        }
+
+    def _score_against_truth(self, truth: pd.Series, predictions: np.ndarray) -> Optional[float]:
+        """
+        Accuracy against an uploaded Label column, mapped to the canonical taxonomy.
+
+        Returns None when the labels cannot be mapped, rather than reporting a
+        misleading score.
+        """
+        try:
+            from src.data.clean import build_label_normalizer, normalize_raw_label
+            import yaml
+
+            params_path = settings.project_root / "params.yaml"
+            if not params_path.exists():
+                return None
+            with open(params_path, "r", encoding="utf-8") as f:
+                label_map = yaml.safe_load(f)["cleaning"]["label_map"]
+
+            normalized_map = build_label_normalizer(label_map)
+            mapped = truth.map(lambda v: normalized_map.get(normalize_raw_label(str(v))))
+            valid = mapped.notna().to_numpy()
+            if not valid.any():
+                return None
+            return round(float((mapped[valid].to_numpy() == predictions[valid]).mean()), 6)
+        except Exception as e:
+            logger.warning(f"Could not score against uploaded ground truth: {e}")
+            return None

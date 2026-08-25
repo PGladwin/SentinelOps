@@ -1,0 +1,101 @@
+schema: '2.0'
+stages:
+  prepare_data:
+    cmd: python scripts/stage_prepare_data.py
+    deps:
+    - path: datasets/CIC-IDS2017-paraquet
+      hash: md5
+      md5: 1281ca808db2e1c854bdab18d72e61d8.dir
+      size: 270655555
+      nfiles: 8
+    - path: scripts/stage_prepare_data.py
+      hash: md5
+      md5: 2541bcc6a351d6d7b0c9093e4ff47f93
+      size: 3394
+    - path: src/data/clean.py
+      hash: md5
+      md5: 80d9496addf9a994bbde66d54a378c24
+      size: 15058
+    - path: src/data/ingest.py
+      hash: md5
+      md5: fa910d349ba05e57b1da9228cb48fa59
+      size: 9797
+    params:
+      params.yaml:
+        cleaning.drop_constant_columns: true
+        cleaning.drop_duplicates: true
+        cleaning.label_map:
+          Benign: BENIGN
+          Bot: Botnet
+          DDoS: DDoS
+          DoS GoldenEye: DoS
+          DoS Hulk: DoS
+          DoS Slowhttptest: DoS
+          DoS slowloris: DoS
+          FTP-Patator: BruteForce
+          Heartbleed: DoS
+          Infiltration: Infiltration
+          PortScan: PortScan
+          SSH-Patator: BruteForce
+          Web Attack - Brute Force: WebAttack
+          Web Attack - XSS: WebAttack
+          Web Attack - Sql Injection: WebAttack
+        cleaning.replace_inf_with_nan: true
+        general.random_seed: 42
+        ingestion.expected_files:
+        - Benign-Monday-no-metadata.parquet
+        - Botnet-Friday-no-metadata.parquet
+        - Bruteforce-Tuesday-no-metadata.parquet
+        - DDoS-Friday-no-metadata.parquet
+        - DoS-Wednesday-no-metadata.parquet
+        - Infiltration-Thursday-no-metadata.parquet
+        - Portscan-Friday-no-metadata.parquet
+        - WebAttacks-Thursday-no-metadata.parquet
+        paths.parquet_dir: datasets/CIC-IDS2017-paraquet
+    outs:
+    - path: data/interim/clean.parquet
+      hash: md5
+      md5: 7f58b19b031c3f7ecb9ca17ea4bbf1d9
+      size: 255732860
+    - path: reports/phase1_cleaning_report.json
+      hash: md5
+      md5: 2f3d027756cfbdf1d3b8d3ce84f67a3e
+      size: 729
+  preprocess:
+    cmd: python scripts/stage_preprocess.py
+    deps:
+    - path: data/interim/clean.parquet
+      hash: md5
+      md5: 7f58b19b031c3f7ecb9ca17ea4bbf1d9
+      size: 255732860
+    - path: scripts/stage_preprocess.py
+      hash: md5
+      md5: e4bff8c2e23039b663e3f47d8ce17f48
+      size: 2738
+    - path: src/data/preprocess.py
+      hash: md5
+      md5: c0189b59d0e7e385380d4673bc4a0770
+      size: 20951
+    params:
+      params.yaml:
+        cleaning.class_encoding:
+          BENIGN: 0
+          DoS: 1
+          DDoS: 2
+          PortScan: 3
+          BruteForce: 4
+          Botnet: 5
+          WebAttack: 6
+          Infiltration: 7
+        cleaning.nan_fill_strategy: median
+        general.random_seed: 42
+        preprocessing.correlation_threshold: 0.95
+        preprocessing.dev_sample_size:
+        preprocessing.scaler: robust
+        preprocessing.test_size: 0.2
+    outs:
+    - path: data/processed
+      hash: md5
+      md5: 61c7b3dee09266ac43fcd42fa0fbbaa9.dir
+      size: 184844825
+      nfiles: 9

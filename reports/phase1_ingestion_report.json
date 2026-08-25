@@ -1,0 +1,320 @@
+{
+  "parquet_dir": "C:\\Prithish S\\MLOPs Project\\datasets\\CIC-IDS2017-paraquet",
+  "files_loaded": [
+    "Benign-Monday-no-metadata.parquet",
+    "Botnet-Friday-no-metadata.parquet",
+    "Bruteforce-Tuesday-no-metadata.parquet",
+    "DDoS-Friday-no-metadata.parquet",
+    "DoS-Wednesday-no-metadata.parquet",
+    "Infiltration-Thursday-no-metadata.parquet",
+    "Portscan-Friday-no-metadata.parquet",
+    "WebAttacks-Thursday-no-metadata.parquet"
+  ],
+  "total_rows": 2313810,
+  "total_columns": 78,
+  "combined_inf": 0,
+  "combined_nan": 0,
+  "combined_constant_cols": [
+    "Bwd PSH Flags",
+    "Bwd URG Flags",
+    "Fwd Avg Bytes/Bulk",
+    "Fwd Avg Packets/Bulk",
+    "Fwd Avg Bulk Rate",
+    "Bwd Avg Bytes/Bulk",
+    "Bwd Avg Packets/Bulk",
+    "Bwd Avg Bulk Rate"
+  ],
+  "combined_label_counts": {
+    "'Benign'": 1977318,
+    "'DoS Hulk'": 172846,
+    "'DDoS'": 128014,
+    "'DoS GoldenEye'": 10286,
+    "'FTP-Patator'": 5931,
+    "'DoS slowloris'": 5385,
+    "'DoS Slowhttptest'": 5228,
+    "'SSH-Patator'": 3219,
+    "'PortScan'": 1956,
+    "'Web Attack � Brute Force'": 1470,
+    "'Bot'": 1437,
+    "'Web Attack � XSS'": 652,
+    "'Infiltration'": 36,
+    "'Web Attack � Sql Injection'": 21,
+    "'Heartbleed'": 11
+  },
+  "per_file": [
+    {
+      "file": "Benign-Monday-no-metadata.parquet",
+      "rows": 458831,
+      "columns": 78,
+      "inf_count": 0,
+      "nan_count_numeric": 0,
+      "nan_count_label": 0,
+      "constant_cols": [
+        "Bwd PSH Flags",
+        "Fwd URG Flags",
+        "Bwd URG Flags",
+        "CWE Flag Count",
+        "Fwd Avg Bytes/Bulk",
+        "Fwd Avg Packets/Bulk",
+        "Fwd Avg Bulk Rate",
+        "Bwd Avg Bytes/Bulk",
+        "Bwd Avg Packets/Bulk",
+        "Bwd Avg Bulk Rate"
+      ],
+      "labels": {
+        "source": "Benign-Monday-no-metadata.parquet",
+        "n_rows": 458831,
+        "n_labels": 1,
+        "label_counts": {
+          "Benign": 458831
+        },
+        "label_reprs": {
+          "Benign": "'Benign'"
+        }
+      }
+    },
+    {
+      "file": "Botnet-Friday-no-metadata.parquet",
+      "rows": 176038,
+      "columns": 78,
+      "inf_count": 0,
+      "nan_count_numeric": 0,
+      "nan_count_label": 0,
+      "constant_cols": [
+        "Bwd PSH Flags",
+        "Fwd URG Flags",
+        "Bwd URG Flags",
+        "CWE Flag Count",
+        "Fwd Avg Bytes/Bulk",
+        "Fwd Avg Packets/Bulk",
+        "Fwd Avg Bulk Rate",
+        "Bwd Avg Bytes/Bulk",
+        "Bwd Avg Packets/Bulk",
+        "Bwd Avg Bulk Rate"
+      ],
+      "labels": {
+        "source": "Botnet-Friday-no-metadata.parquet",
+        "n_rows": 176038,
+        "n_labels": 2,
+        "label_counts": {
+          "Benign": 174601,
+          "Bot": 1437
+        },
+        "label_reprs": {
+          "Benign": "'Benign'",
+          "Bot": "'Bot'"
+        }
+      }
+    },
+    {
+      "file": "Bruteforce-Tuesday-no-metadata.parquet",
+      "rows": 389714,
+      "columns": 78,
+      "inf_count": 0,
+      "nan_count_numeric": 0,
+      "nan_count_label": 0,
+      "constant_cols": [
+        "Bwd PSH Flags",
+        "Fwd URG Flags",
+        "Bwd URG Flags",
+        "CWE Flag Count",
+        "Fwd Avg Bytes/Bulk",
+        "Fwd Avg Packets/Bulk",
+        "Fwd Avg Bulk Rate",
+        "Bwd Avg Bytes/Bulk",
+        "Bwd Avg Packets/Bulk",
+        "Bwd Avg Bulk Rate"
+      ],
+      "labels": {
+        "source": "Bruteforce-Tuesday-no-metadata.parquet",
+        "n_rows": 389714,
+        "n_labels": 3,
+        "label_counts": {
+          "Benign": 380564,
+          "FTP-Patator": 5931,
+          "SSH-Patator": 3219
+        },
+        "label_reprs": {
+          "Benign": "'Benign'",
+          "FTP-Patator": "'FTP-Patator'",
+          "SSH-Patator": "'SSH-Patator'"
+        }
+      }
+    },
+    {
+      "file": "DDoS-Friday-no-metadata.parquet",
+      "rows": 221264,
+      "columns": 78,
+      "inf_count": 0,
+      "nan_count_numeric": 0,
+      "nan_count_label": 0,
+      "constant_cols": [
+        "Bwd PSH Flags",
+        "Fwd URG Flags",
+        "Bwd URG Flags",
+        "CWE Flag Count",
+        "Fwd Avg Bytes/Bulk",
+        "Fwd Avg Packets/Bulk",
+        "Fwd Avg Bulk Rate",
+        "Bwd Avg Bytes/Bulk",
+        "Bwd Avg Packets/Bulk",
+        "Bwd Avg Bulk Rate"
+      ],
+      "labels": {
+        "source": "DDoS-Friday-no-metadata.parquet",
+        "n_rows": 221264,
+        "n_labels": 2,
+        "label_counts": {
+          "DDoS": 128014,
+          "Benign": 93250
+        },
+        "label_reprs": {
+          "DDoS": "'DDoS'",
+          "Benign": "'Benign'"
+        }
+      }
+    },
+    {
+      "file": "DoS-Wednesday-no-metadata.parquet",
+      "rows": 584991,
+      "columns": 78,
+      "inf_count": 0,
+      "nan_count_numeric": 0,
+      "nan_count_label": 0,
+      "constant_cols": [
+        "Bwd PSH Flags",
+        "Fwd URG Flags",
+        "Bwd URG Flags",
+        "CWE Flag Count",
+        "Fwd Avg Bytes/Bulk",
+        "Fwd Avg Packets/Bulk",
+        "Fwd Avg Bulk Rate",
+        "Bwd Avg Bytes/Bulk",
+        "Bwd Avg Packets/Bulk",
+        "Bwd Avg Bulk Rate"
+      ],
+      "labels": {
+        "source": "DoS-Wednesday-no-metadata.parquet",
+        "n_rows": 584991,
+        "n_labels": 6,
+        "label_counts": {
+          "Benign": 391235,
+          "DoS Hulk": 172846,
+          "DoS GoldenEye": 10286,
+          "DoS slowloris": 5385,
+          "DoS Slowhttptest": 5228,
+          "Heartbleed": 11
+        },
+        "label_reprs": {
+          "Benign": "'Benign'",
+          "DoS Hulk": "'DoS Hulk'",
+          "DoS GoldenEye": "'DoS GoldenEye'",
+          "DoS slowloris": "'DoS slowloris'",
+          "DoS Slowhttptest": "'DoS Slowhttptest'",
+          "Heartbleed": "'Heartbleed'"
+        }
+      }
+    },
+    {
+      "file": "Infiltration-Thursday-no-metadata.parquet",
+      "rows": 207630,
+      "columns": 78,
+      "inf_count": 0,
+      "nan_count_numeric": 0,
+      "nan_count_label": 0,
+      "constant_cols": [
+        "Bwd PSH Flags",
+        "Bwd URG Flags",
+        "Fwd Avg Bytes/Bulk",
+        "Fwd Avg Packets/Bulk",
+        "Fwd Avg Bulk Rate",
+        "Bwd Avg Bytes/Bulk",
+        "Bwd Avg Packets/Bulk",
+        "Bwd Avg Bulk Rate"
+      ],
+      "labels": {
+        "source": "Infiltration-Thursday-no-metadata.parquet",
+        "n_rows": 207630,
+        "n_labels": 2,
+        "label_counts": {
+          "Benign": 207594,
+          "Infiltration": 36
+        },
+        "label_reprs": {
+          "Benign": "'Benign'",
+          "Infiltration": "'Infiltration'"
+        }
+      }
+    },
+    {
+      "file": "Portscan-Friday-no-metadata.parquet",
+      "rows": 119522,
+      "columns": 78,
+      "inf_count": 0,
+      "nan_count_numeric": 0,
+      "nan_count_label": 0,
+      "constant_cols": [
+        "Bwd PSH Flags",
+        "Fwd URG Flags",
+        "Bwd URG Flags",
+        "CWE Flag Count",
+        "Fwd Avg Bytes/Bulk",
+        "Fwd Avg Packets/Bulk",
+        "Fwd Avg Bulk Rate",
+        "Bwd Avg Bytes/Bulk",
+        "Bwd Avg Packets/Bulk",
+        "Bwd Avg Bulk Rate"
+      ],
+      "labels": {
+        "source": "Portscan-Friday-no-metadata.parquet",
+        "n_rows": 119522,
+        "n_labels": 2,
+        "label_counts": {
+          "Benign": 117566,
+          "PortScan": 1956
+        },
+        "label_reprs": {
+          "Benign": "'Benign'",
+          "PortScan": "'PortScan'"
+        }
+      }
+    },
+    {
+      "file": "WebAttacks-Thursday-no-metadata.parquet",
+      "rows": 155820,
+      "columns": 78,
+      "inf_count": 0,
+      "nan_count_numeric": 0,
+      "nan_count_label": 0,
+      "constant_cols": [
+        "Bwd PSH Flags",
+        "Fwd URG Flags",
+        "Bwd URG Flags",
+        "CWE Flag Count",
+        "Fwd Avg Bytes/Bulk",
+        "Fwd Avg Packets/Bulk",
+        "Fwd Avg Bulk Rate",
+        "Bwd Avg Bytes/Bulk",
+        "Bwd Avg Packets/Bulk",
+        "Bwd Avg Bulk Rate"
+      ],
+      "labels": {
+        "source": "WebAttacks-Thursday-no-metadata.parquet",
+        "n_rows": 155820,
+        "n_labels": 4,
+        "label_counts": {
+          "Benign": 153677,
+          "Web Attack � Brute Force": 1470,
+          "Web Attack � XSS": 652,
+          "Web Attack � Sql Injection": 21
+        },
+        "label_reprs": {
+          "Benign": "'Benign'",
+          "Web Attack � Brute Force": "'Web Attack � Brute Force'",
+          "Web Attack � XSS": "'Web Attack � XSS'",
+          "Web Attack � Sql Injection": "'Web Attack � Sql Injection'"
+        }
+      }
+    }
+  ]
+}
