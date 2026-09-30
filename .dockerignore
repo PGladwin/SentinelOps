@@ -1,0 +1,49 @@
+# Keep the build context small and the image free of things it must never ship.
+#
+# data/ alone is ~180 MB and the serving image needs none of it: the champion
+# artifacts carry their own preprocessing bundle and class encoding.
+
+.git/
+.github/
+.dvc/
+.venv/
+venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+
+# Datasets, intermediate data, and experiment stores
+data/
+datasets/
+mlruns/
+mlartifacts/
+mlflow.db
+*.parquet
+
+# Reports are mostly confusion-matrix and SHAP PNGs the API never serves.
+# The two JSON documents that back /mlops/* are re-included, or the Dockerfile's
+# COPY of them would fail with "file not found in build context".
+reports/
+!reports/mlops_state.json
+!reports/drift_summary.json
+notebooks/
+
+# The console builds from its own context (frontend/Dockerfile); none of it
+# belongs in the API image.
+frontend/
+
+# Local scratch and logs
+*.log
+scripts/*.log
+inspect_*.txt
+phase*_run.txt
+test_results*.txt
+pip_install.txt
+installed_packages.txt
+
+# Secrets must never enter an image layer
+.env
+.env.*
+*.pem
+*.key

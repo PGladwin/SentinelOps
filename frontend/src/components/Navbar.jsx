@@ -4,8 +4,8 @@ import { useTheme } from "../theme-context";
 import { StatusIndicator } from "./ui";
 
 const LABELS = {
+  live: "Live",
   detect: "Detect",
-  explain: "Explain",
   mlops: "MLOps",
 };
 

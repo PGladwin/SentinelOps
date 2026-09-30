@@ -1,0 +1,49 @@
+# =============================================================================
+# SentinelOps - Local Stack
+# =============================================================================
+#     docker compose up --build
+#
+#     Console:  http://localhost:5173
+#     API:      http://localhost:8000
+#     API docs: http://localhost:8000/docs
+#
+# Brings up the same two images that get deployed, so a problem that only
+# appears in a container shows up here rather than in production.
+# =============================================================================
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sentinelops-api
+    ports:
+      - "8000:8000"
+    environment:
+      # The console is served from 5173 below; without it listed here every
+      # browser request from the UI fails CORS preflight.
+      SENTINELOPS_CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
+      SENTINELOPS_STREAM_RATE: "8"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Resolved by the browser, not by the ui container, so this is the
+        # host-published address rather than the compose service name.
+        VITE_API_BASE_URL: "http://localhost:8000"
+    image: sentinelops-ui
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped

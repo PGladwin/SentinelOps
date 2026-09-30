@@ -1,52 +1,32 @@
-# =============================================
-# SentinelOps - Python Requirements
-# =============================================
-# Phase 1: Data Pipeline (currently installed)
-# =============================================
+# =============================================================================
+# SentinelOps - Full Requirements (pipeline + serving + development)
+# =============================================================================
+# Install this to reproduce the pipeline, train models, or run the test suite.
+#
+# To deploy only the inference API, use the slim requirements-api.txt instead:
+# it omits MLflow, DVC and Evidently, which the serving path never imports.
+# =============================================================================
 
-# Core data
-numpy>=1.24.1
-pandas>=2.0.0
-pyarrow>=15.0.0
+# --- Serving layer (mirrors requirements-api.txt) ---
+-r requirements-api.txt
 
-# Configuration
-pyyaml>=6.0
+# =============================================================================
+# Data pipeline
+# =============================================================================
+matplotlib>=3.7.0            # confusion matrices and SHAP summary plots
 
-# Machine Learning (Phase 1 preprocessing)
-scikit-learn>=1.3.0
+# =============================================================================
+# MLOps: tracking, versioning, monitoring
+# =============================================================================
+# These back the pipeline, not the API. src/mlops/drift.py imports Evidently
+# lazily and degrades to "drift unavailable" without it, so the serving image
+# stays slim while `dvc repro` has everything it needs.
+mlflow>=2.10.0               # experiment tracking + model registry
+dvc>=3.0.0                   # pipeline DAG and data/model versioning
+evidently>=0.4.0             # data drift reports
 
-# =============================================
-# Phase 2: ML Models & Evaluation
-# =============================================
-xgboost>=2.0.0
-shap>=0.44.0
-matplotlib>=3.7.0
-
-# =============================================
-# Phase 3+: MLOps Tracking (install when needed)
-# =============================================
-# mlflow>=2.10.0
-
-# =============================================
-# Local Inference API (FastAPI)
-# =============================================
-fastapi>=0.110.0
-uvicorn[standard]>=0.27.0
-pydantic>=2.6.0
-python-multipart>=0.0.9
-httpx>=0.27.0
-
-# =============================================
-# Phase 5+: Monitoring (install when needed)
-# =============================================
-# evidently>=0.4.0
-
-# =============================================
-# Phase 6+: Dashboard (install when needed)
-# =============================================
-# streamlit>=1.32.0
-
-# =============================================
-# Development/Testing
-# =============================================
+# =============================================================================
+# Development & testing
+# =============================================================================
 pytest>=7.0.0
+httpx>=0.27.0                # FastAPI TestClient transport

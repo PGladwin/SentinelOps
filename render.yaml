@@ -1,0 +1,86 @@
+# =============================================================================
+# SentinelOps - Render Blueprint
+# =============================================================================
+# Deploys the API and the console together from this repository.
+#
+#   1. Push to GitHub.
+#   2. Render dashboard -> New -> Blueprint -> pick this repo.
+#   3. After the first deploy, set SENTINELOPS_CORS_ORIGINS on the API service
+#      to the console's URL (printed by Render), then redeploy the API.
+#
+# Both services fit Render's free tier. The API image is ~1 GB unpacked, driven
+# by the XGBoost and SHAP wheels; the model itself is only 3.6 MB.
+#
+# Free-tier note: an idle instance is suspended and takes roughly 50 seconds to
+# wake. Open the API's /health once before a live demo so the model is resident
+# before anyone is watching.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Inference API
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: sentinelops-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Comma-separated. Replace with the console's real URL after its first
+      # deploy -- a wildcard here would allow any site to call this API.
+      - key: SENTINELOPS_CORS_ORIGINS
+        sync: false
+      - key: SENTINELOPS_STREAM_RATE
+        value: "8"
+      # A shared free-tier CPU scores the live feed more slowly than a laptop.
+      # Capping the rate keeps one enthusiastic viewer from starving /predict.
+      - key: SENTINELOPS_STREAM_MAX_RATE
+        value: "60"
+      - key: SENTINELOPS_MAX_UPLOAD_MB
+        value: "25"
+      # Free instances have 512 MB. Batch SHAP over a large upload is the one
+      # path that can exceed that, so the analysis caps are tightened here.
+      - key: SENTINELOPS_MAX_ANALYSIS_ROWS
+        value: "20000"
+      - key: SENTINELOPS_MAX_SHAP_ROWS
+        value: "5000"
+      - key: SENTINELOPS_MAX_RETURNED_ROWS
+        value: "5000"
+
+  # ---------------------------------------------------------------------------
+  # Console (static bundle)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: sentinelops-ui
+    runtime: static
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
+    plan: free
+    autoDeploy: true
+    envVars:
+      # Set to the API's full origin, scheme included:
+      #     https://sentinelops-api.onrender.com
+      # Deliberately not wired via `fromService`: its host properties resolve to
+      # a bare hostname, and the client concatenates this value with a path, so
+      # a missing scheme yields requests to a relative "sentinelops-api.../health"
+      # that fail only in the browser, after a green deploy.
+      #
+      # Vite inlines this at build time, so changing it requires a redeploy of
+      # the console, not just a restart.
+      - key: VITE_API_BASE_URL
+        sync: false
+      - key: VITE_GITHUB_REPO
+        value: prithish47/Mlops-proj
+    routes:
+      # Single-page app: unknown paths must serve index.html, not 404.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable

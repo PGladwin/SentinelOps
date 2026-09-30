@@ -162,9 +162,22 @@ def test_analyze_detects_attacks_in_demo_traffic():
     assert data["summary"]["threat_level"] == "HIGH"
 
 
-def test_analyze_rejects_non_csv():
-    resp = client.post("/analyze", files={"file": ("flows.txt", b"nope", "text/plain")})
+def test_analyze_rejects_unsupported_file_type():
+    """A file type that cannot hold tabular flow data is refused before parsing."""
+    resp = client.post("/analyze", files={"file": ("report.pdf", b"%PDF-1.4", "application/pdf")})
     assert resp.status_code == 400
+    assert "unsupported" in resp.json()["detail"].lower()
+
+
+def test_analyze_accepts_txt_as_delimited_text():
+    """
+    .txt is a supported container, not a rejected type: exporters routinely
+    write delimited flow data with that extension, and the delimiter is sniffed
+    rather than assumed. It must therefore fail on its CONTENT (422, missing
+    features) rather than on its extension (400).
+    """
+    resp = client.post("/analyze", files={"file": ("flows.txt", b"a,b\n1,2\n", "text/plain")})
+    assert resp.status_code == 422
 
 
 def test_analyze_missing_columns_returns_422():

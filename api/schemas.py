@@ -118,6 +118,33 @@ class AnalysisSummary(BaseModel):
         default=None,
         description="Accuracy against the uploaded Label column, when present.",
     )
+    ground_truth_scored: int = Field(
+        default=0,
+        description="Rows the accuracy was computed over. Labels that do not "
+                    "resolve to the taxonomy are excluded, so this can be lower "
+                    "than total_connections; compare the two before reading the "
+                    "accuracy as whole-file.",
+    )
+    features_expected: int = Field(default=0, description="Features the Champion consumes.")
+    features_matched: int = Field(
+        default=0,
+        description="Features the upload actually supplied, after alias and "
+                    "case/separator resolution.",
+    )
+    schema_coverage: float = Field(
+        default=0.0,
+        description="features_matched / features_expected. Below 1.0 the "
+                    "analysis is partly driven by training medians.",
+    )
+    columns_supplied: int = Field(default=0, description="Columns present in the uploaded file.")
+    unused_columns: list[str] = Field(
+        default_factory=list,
+        description="Uploaded columns the promoted Champion does not consume, "
+                    "and therefore ignored (first 20). Usually harmless: most "
+                    "are dataset features the correlation filter dropped during "
+                    "training. Identifier and label columns are excluded.",
+    )
+    n_unused_columns: int = 0
 
 
 class AnalysisRow(BaseModel):

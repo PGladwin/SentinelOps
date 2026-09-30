@@ -1,11 +1,14 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { ChevronLeft, ChevronRight, Download, FileWarning, ShieldAlert, UploadCloud, X } from "lucide-react";
-import { postAnalyze } from "../api";
+import {
+  ChevronLeft, ChevronRight, Download, FileWarning, ShieldAlert, UploadCloud,
+} from "lucide-react";
+import { fetchSchema, postAnalyze, schemaTemplateUrl } from "../api";
 import { tooltipStyle, useTheme } from "../theme-context";
 import { ChartCard, EmptyState, MetricCard, Panel, SectionHeader, StatusBadge, Th } from "./ui";
+import { FlowDetailDrawer } from "./explanation";
 
 const ROWS_PER_PAGE = 20;
 
@@ -14,99 +17,90 @@ const THREAT_TEXT = { HIGH: "text-danger", MEDIUM: "text-warn", LOW: "text-safe"
 
 const fmt = (n) => (typeof n === "number" ? n.toLocaleString() : n);
 
-/** One-sentence rationale an analyst can act on without reading SHAP values. */
-function rationale(row) {
-  if (!row?.top_features?.length) return null;
-  const raising = row.top_features.filter((f) => f.increases_threat);
-  const drivers = (raising.length ? raising : row.top_features)
-    .slice(0, 3)
-    .map((f) => `${f.feature} (${f.value})`);
-  return `Classified ${row.prediction} at ${(row.confidence * 100).toFixed(1)}% confidence, driven by ${drivers.join(", ")}.`;
-}
-
-/** Signed contribution bars, diverging from a centre baseline. */
-function Contributions({ row }) {
-  const data = row?.top_features || [];
-  if (!data.length) return <p className="text-xs text-faint">No attribution available.</p>;
-  const max = Math.max(...data.map((f) => Math.abs(f.shap_value)), 1e-4);
-
-  return (
-    <div className="space-y-3">
-      {data.map((f) => {
-        const width = (Math.abs(f.shap_value) / max) * 50;
-        return (
-          <div key={f.feature}>
-            <div className="flex justify-between items-baseline gap-3 mb-1">
-              <span className="text-xs text-ink truncate">{f.feature}</span>
-              <span className={`text-xs font-mono tabular-nums shrink-0 ${f.increases_threat ? "text-danger" : "text-safe"}`}>
-                {f.shap_value > 0 ? "+" : ""}{f.shap_value.toFixed(4)}
-              </span>
-            </div>
-            <div className="relative h-1.5 rounded-full bg-elevated">
-              <div className="absolute left-1/2 -top-0.5 -bottom-0.5 w-px bg-line" />
-              <div
-                className={`absolute top-0 bottom-0 rounded-full ${f.increases_threat ? "bg-danger left-1/2" : "bg-safe"}`}
-                style={f.increases_threat ? { width: `${width}%` } : { width: `${width}%`, right: "50%" }}
-              />
-            </div>
-            <p className="text-[11px] text-faint font-mono mt-1">value {f.value}</p>
-          </div>
-        );
-      })}
-      <p className="text-[11px] text-faint leading-relaxed pt-1 border-t border-line">
-        Right of centre raises threat, left lowers it. Direction accounts for the predicted
-        class, so on a benign verdict a positive value lowers threat.
-      </p>
-    </div>
-  );
-}
-
-function DetailPanel({ row, onClose }) {
-  if (!row) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <aside className="relative w-full max-w-sm h-full bg-surface border-l border-line overflow-y-auto animate-drawer-in">
-        <div className="sticky top-0 bg-surface border-b border-line px-5 py-4 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-faint">Flow {row.flow_id}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`h-1.5 w-1.5 rounded-full ${row.is_attack ? "bg-danger" : "bg-safe"}`} />
-              <h3 className="text-lg font-semibold leading-none">{row.prediction}</h3>
-            </div>
-            <p className="text-xs text-muted font-mono tabular-nums mt-1">
-              {(row.confidence * 100).toFixed(2)}% confidence
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="p-1 rounded-md text-muted hover:text-ink hover:bg-elevated"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-6">
-          <p className="text-xs text-muted leading-relaxed">{rationale(row)}</p>
-          <div>
-            <h4 className="text-[10px] font-medium uppercase tracking-[0.1em] text-faint mb-3">
-              Feature contributions
-            </h4>
-            <Contributions row={row} />
-          </div>
-        </div>
-      </aside>
-    </div>
-  );
-}
-
 const SAMPLE_DATASET_URL = "/demo_traffic_mixed.csv";
 const SAMPLE_DATASET_NAME = "demo_traffic_mixed.csv";
 
-function Dropzone({ file, setFile, setError, loading, onAnalyze }) {
+// Kept in step with SUPPORTED_UPLOAD_SUFFIXES in api/main.py. Used only for the
+// file picker's filter; the server validates for real.
+const FALLBACK_FORMATS = [".csv", ".tsv", ".txt", ".json", ".jsonl", ".ndjson", ".parquet"];
+
+/**
+ * How much of the model's schema the upload actually supplied.
+ *
+ * A partial match still produces verdicts -- absent features are filled from
+ * training medians -- so the difference between a complete file and a thin one
+ * has to be visible. Without this, a scan driven mostly by defaults looks
+ * identical to a clean one.
+ */
+function SchemaMatch({ summary }) {
+  const expected = summary.features_expected ?? 0;
+  const matched = summary.features_matched ?? 0;
+  if (!expected) return null;
+
+  const coverage = summary.schema_coverage ?? matched / expected;
+  const complete = matched >= expected;
+  const tone = complete ? "safe" : coverage >= 0.9 ? "warn" : "danger";
+
+  // Written out rather than interpolated: Tailwind generates utilities by
+  // scanning source text, so a class built at runtime is never emitted.
+  const TEXT = { safe: "text-safe", warn: "text-warn", danger: "text-danger" };
+  const BAR = { safe: "bg-safe", warn: "bg-warn", danger: "bg-danger" };
+
+  return (
+    <div className="rounded-md border border-line bg-elevated px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-faint">
+          Schema match
+        </p>
+        <p className={`text-xs font-mono tabular-nums ${TEXT[tone]}`}>
+          {matched} / {expected} features · {(coverage * 100).toFixed(0)}%
+        </p>
+      </div>
+
+      <div className="h-1 rounded-full bg-canvas overflow-hidden mt-2">
+        <div
+          className={`h-full rounded-full ${BAR[tone]}`}
+          style={{ width: `${Math.max(coverage * 100, 1)}%` }}
+        />
+      </div>
+
+      <p className="text-[11px] text-muted mt-2 leading-relaxed">
+        {complete ? (
+          <>
+            Every feature the model consumes was found in your file
+            {summary.columns_supplied ? ` (${summary.columns_supplied} columns supplied)` : ""}.
+            Column names were matched regardless of case, spacing, or separators.
+          </>
+        ) : (
+          <span className="text-warn">
+            {summary.n_imputed_columns} feature(s) were absent and filled from training
+            medians, so these verdicts are partly driven by defaults rather than by your
+            traffic: {summary.imputed_columns?.slice(0, 6).join(", ")}
+            {summary.imputed_columns?.length > 6 ? "…" : ""}
+          </span>
+        )}
+      </p>
+
+      {summary.n_unused_columns > 0 && (
+        // Informational, not a warning: extra columns are the normal case for a
+        // full dataset export, since the champion consumes a filtered subset.
+        <p className="text-[11px] text-faint mt-1.5 leading-relaxed">
+          {summary.n_unused_columns} further column(s) were carried but not used — this
+          model consumes a filtered subset of the dataset's features.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Dropzone({ file, setFile, setError, loading, onAnalyze, schema }) {
   const [dragging, setDragging] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
+
+  // Prefer what the server reports it accepts; the constants are only a
+  // fallback for when /schema has not loaded yet.
+  const formats = schema?.supported_formats?.length ? schema.supported_formats : FALLBACK_FORMATS;
+  const maxMb = schema?.max_upload_mb ?? 50;
 
   const accept = (f) => {
     if (!f) return;
@@ -146,13 +140,24 @@ function Dropzone({ file, setFile, setError, loading, onAnalyze }) {
           {file ? file.name : "Drop a traffic capture, or browse"}
         </p>
         <p className="text-xs text-muted mt-1">
-          {file ? `${(file.size / 1024).toFixed(0)} KB` : "CSV network flow export · CIC-IDS2017 schema · up to 50 MB"}
+          {file
+            ? `${(file.size / 1024).toFixed(0)} KB`
+            : `${formats.map((f) => f.replace(".", "").toUpperCase()).join(" · ")} · up to ${maxMb} MB`}
         </p>
+        {!file && (
+          <p className="text-[11px] text-faint mt-1.5 max-w-md leading-relaxed">
+            Column names are matched regardless of case, spacing, or separators — so
+            <span className="font-mono"> flow_duration</span>,
+            <span className="font-mono"> Flow Duration</span> and
+            <span className="font-mono"> FLOW-DURATION</span> all resolve to the same
+            feature. Identifier columns (IPs, ports, timestamps) are ignored.
+          </p>
+        )}
 
         <div className="flex items-center gap-3 mt-5">
           <input
             type="file"
-            accept=".csv"
+            accept={formats.join(",")}
             id="soc-file"
             className="sr-only"
             onChange={(e) => accept(e.target.files?.[0])}
@@ -172,13 +177,24 @@ function Dropzone({ file, setFile, setError, loading, onAnalyze }) {
           </button>
         </div>
 
-        <button
-          onClick={useSampleDataset}
-          disabled={loadingSample || loading}
-          className="text-xs text-accent hover:underline disabled:opacity-40 mt-4"
-        >
-          {loadingSample ? "Loading sample…" : "Or use the sample dataset (6,000 flows, mixed benign + attacks)"}
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 mt-4">
+          <button
+            onClick={useSampleDataset}
+            disabled={loadingSample || loading}
+            className="text-xs text-accent hover:underline disabled:opacity-40"
+          >
+            {loadingSample ? "Loading sample…" : "Use the sample dataset (6,000 flows)"}
+          </button>
+          <span className="text-faint text-xs">·</span>
+          <a
+            href={schemaTemplateUrl()}
+            download
+            className="text-xs text-muted hover:text-ink hover:underline"
+          >
+            Download schema template
+            {schema ? ` (${schema.feature_count} columns)` : ""}
+          </a>
+        </div>
       </div>
     </div>
   );
@@ -193,6 +209,17 @@ export default function SocDashboard() {
   const [selected, setSelected] = useState(null);
   const [page, setPage] = useState(0);
   const [onlyThreats, setOnlyThreats] = useState(false);
+  const [schema, setSchema] = useState(null);
+
+  // Best-effort: the dropzone falls back to sensible constants if this fails,
+  // so a schema fetch error must not block uploading.
+  useEffect(() => {
+    let cancelled = false;
+    fetchSchema()
+      .then((s) => !cancelled && setSchema(s))
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const rows = useMemo(() => result?.rows || [], [result]);
   const filtered = useMemo(
@@ -265,7 +292,14 @@ export default function SocDashboard() {
         description="Upload a flow export — every connection is classified and explained against the production model."
       />
 
-      <Dropzone file={file} setFile={setFile} setError={setError} loading={loading} onAnalyze={analyze} />
+      <Dropzone
+        file={file}
+        setFile={setFile}
+        setError={setError}
+        loading={loading}
+        onAnalyze={analyze}
+        schema={schema}
+      />
       {error && (
         <div className="flex items-start gap-2 px-4 py-3 rounded-md border border-danger/30 bg-danger-soft text-danger text-xs">
           <FileWarning className="h-4 w-4 shrink-0 mt-0.5" />
@@ -293,22 +327,33 @@ export default function SocDashboard() {
               <p className="text-[11px] text-faint font-mono ml-auto shrink-0">{summary.filename}</p>
             </div>
 
-            {(summary.ground_truth_available || summary.n_imputed_columns > 0 || summary.truncated) && (
-              <div className="mt-4 pt-4 border-t border-line space-y-1.5 text-xs text-muted">
+            <div className="mt-4 pt-4 border-t border-line">
+              <SchemaMatch summary={summary} />
+            </div>
+
+            {(summary.ground_truth_available || summary.truncated) && (
+              <div className="mt-4 space-y-1.5 text-xs text-muted">
                 {summary.ground_truth_available && summary.ground_truth_accuracy != null && (
                   <p>
                     File included ground-truth labels — measured accuracy{" "}
                     <span className="font-mono text-ink">
                       {(summary.ground_truth_accuracy * 100).toFixed(2)}%
                     </span>
+                    {/* Labels that do not resolve to the taxonomy are excluded, so
+                        the denominator is shown whenever it is not the whole file. */}
+                    {summary.ground_truth_scored > 0 &&
+                      summary.ground_truth_scored < summary.total_connections && (
+                        <span className="text-warn">
+                          {" "}
+                          (over {fmt(summary.ground_truth_scored)} of{" "}
+                          {fmt(summary.total_connections)} rows — the rest carried
+                          labels outside the taxonomy)
+                        </span>
+                      )}
                   </p>
                 )}
-                {summary.n_imputed_columns > 0 && (
-                  <p className="text-warn">
-                    {summary.n_imputed_columns} column(s) missing and imputed from training
-                    medians: {summary.imputed_columns.join(", ")}
-                  </p>
-                )}
+                {/* Imputed columns are reported by SchemaMatch above, alongside
+                    the coverage figure that gives them their meaning. */}
                 {summary.truncated && (
                   <p>
                     Showing first {fmt(summary.rows_returned)} of {fmt(summary.total_connections)} rows.
@@ -474,7 +519,11 @@ export default function SocDashboard() {
         />
       )}
 
-      <DetailPanel row={selected} onClose={() => setSelected(null)} />
+      <FlowDetailDrawer
+        flow={selected}
+        eyebrow={selected ? `Flow ${selected.flow_id}` : "Flow"}
+        onClose={() => setSelected(null)}
+      />
     </div>
   );
 }

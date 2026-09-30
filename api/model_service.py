@@ -28,11 +28,14 @@ import shap
 
 from api.config import settings
 from src.data.inference_prep import (
+    LABEL_COLUMN_CANDIDATES,
+    NON_FEATURE_COLUMNS,
     extract_labels,
     load_inference_bundle,
     normalize_columns,
     prepare_for_champion,
     prepare_with_report,
+    resolve_truth_labels,
 )
 from src.models.demo_samples import load_demo_samples
 from src.models.train import load_champion_model
@@ -301,20 +304,52 @@ class ModelService:
     # SOC analysis
     # ------------------------------------------------------------------
 
-    def _read_csv(self, file_content: bytes) -> pd.DataFrame:
-        """Parse uploaded CSV bytes, enforcing size and row guardrails."""
+    def _read_upload(self, file_content: bytes, filename: str) -> pd.DataFrame:
+        """
+        Parse an uploaded traffic export into a DataFrame.
+
+        Accepts the formats network tooling actually emits -- delimited text
+        (CSV/TSV, with the delimiter sniffed rather than assumed), JSON records,
+        newline-delimited JSON, and Parquet -- so a user is not forced to
+        convert an export before they can scan it.
+
+        Size and row guardrails are enforced here, before any parsing that
+        would materialize the whole file.
+        """
         if len(file_content) > settings.max_upload_bytes:
             raise ValueError(
                 f"Uploaded file is {len(file_content) / 1024 / 1024:.1f} MB, exceeding the "
                 f"{settings.max_upload_bytes / 1024 / 1024:.0f} MB limit."
             )
-        try:
-            df = pd.read_csv(io.BytesIO(file_content), low_memory=False)
-        except Exception as e:
-            raise ValueError(f"Could not parse CSV: {e}")
+        if not file_content.strip():
+            raise ValueError("Uploaded file is empty.")
 
-        if df.empty:
-            raise ValueError("Uploaded CSV contains no data rows.")
+        suffix = Path(filename or "").suffix.lower()
+        buffer = io.BytesIO(file_content)
+
+        try:
+            if suffix == ".parquet":
+                df = pd.read_parquet(buffer)
+            elif suffix == ".jsonl" or suffix == ".ndjson":
+                df = pd.read_json(buffer, lines=True)
+            elif suffix == ".json":
+                df = self._read_json(file_content)
+            else:
+                # The delimiter is sniffed from the header rather than passed as
+                # sep=None: that option forces pandas onto the Python engine,
+                # which is far slower on a large export and rejects low_memory.
+                df = pd.read_csv(
+                    buffer,
+                    sep=self._sniff_delimiter(file_content),
+                    low_memory=False,
+                )
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"Could not parse {suffix or 'the uploaded file'}: {e}")
+
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            raise ValueError("Uploaded file contains no data rows.")
 
         if len(df) > settings.max_analysis_rows:
             logger.warning(
@@ -322,6 +357,65 @@ class ModelService:
             )
             df = df.head(settings.max_analysis_rows)
         return df
+
+    @staticmethod
+    def _sniff_delimiter(file_content: bytes) -> str:
+        """
+        Infer the delimiter from the header line.
+
+        Picks whichever candidate appears most often, which is reliable here
+        because a flow export's header carries dozens of feature names and
+        therefore dozens of separators -- the true delimiter wins by a wide
+        margin over a stray character inside a name. Falls back to a comma when
+        nothing separates anything, so a single-column file still parses.
+        """
+        header = file_content.split(b"\n", 1)[0].decode("utf-8", errors="replace")
+        counts = {d: header.count(d) for d in (",", "\t", ";", "|")}
+        best = max(counts, key=counts.get)
+        return best if counts[best] > 0 else ","
+
+    @staticmethod
+    def _read_json(file_content: bytes) -> pd.DataFrame:
+        """
+        Parse JSON that may be a bare array, or records nested under a key.
+
+        Exporters commonly wrap the rows -- {"flows": [...]} or {"data": [...]}
+        -- and pd.read_json turns that into a one-row frame of lists rather than
+        failing, which would then look like a file whose every column is missing.
+        """
+        payload = json.loads(file_content)
+
+        if isinstance(payload, dict):
+            for key in ("flows", "data", "records", "rows", "results"):
+                if isinstance(payload.get(key), list):
+                    payload = payload[key]
+                    break
+            else:
+                # A dict of equal-length columns is also valid JSON tabular data.
+                payload = [payload]
+
+        return pd.DataFrame(payload)
+
+    def _coverage_report(self, prep_report: dict[str, Any]) -> dict[str, Any]:
+        """
+        Describe how much of the Champion's schema the upload actually supplied.
+
+        Missing features are filled from training medians, which lets an
+        analysis complete on a partial export -- but a file that matched almost
+        nothing would still produce confident-looking verdicts driven entirely
+        by imputed constants. Quantifying the match lets the caller refuse, and
+        lets the UI qualify what it shows.
+        """
+        total = len(self.feature_names)
+        imputed = prep_report["n_imputed_columns"]
+        matched = total - imputed
+        return {
+            "features_expected": total,
+            "features_matched": matched,
+            "features_imputed": imputed,
+            "coverage": round(matched / total, 6) if total else 0.0,
+            "imputed_columns": prep_report["imputed_columns"],
+        }
 
     def _threat_level(self, attack_rate: float, thresholds: dict[str, float]) -> str:
         """Map an attack rate to a HIGH / MEDIUM / LOW banner."""
@@ -358,17 +452,49 @@ class ModelService:
         """
         thresholds = thresholds or {"high": 0.20, "medium": 0.05}
 
-        df = self._read_csv(file_content)
-        df = normalize_columns(df)
+        df = self._read_upload(file_content, filename)
+        n_supplied_columns = len(df.columns)
+
+        # Passing the Champion's feature names lets the resolver match case and
+        # separator variants against the exact schema being served.
+        df = normalize_columns(df, target_features=self.feature_names)
         truth = extract_labels(df)
+
+        # Columns present in the upload that this Champion does not consume.
+        #
+        # Deliberately NOT called "unrecognized": most entries here are genuine
+        # CIC-IDS2017 features the correlation filter dropped during training,
+        # so a well-formed 70-column export legitimately leaves ~23 unused.
+        # Flagging those as unknown would alarm a user whose file is perfect.
+        # Identifier and label columns are excluded because they are expected.
+        #
+        # Computed AFTER normalization: "flow_duration" resolves to
+        # "Flow Duration", so diffing the supplied spelling would report
+        # correctly-matched columns as unused.
+        unused = sorted(
+            {str(c) for c in df.columns}
+            - set(self.feature_names)
+            - NON_FEATURE_COLUMNS
+            - set(LABEL_COLUMN_CANDIDATES)
+        )
 
         # allow_missing: real exports vary in schema. Absent columns are
         # imputed from training medians and reported back, so a degraded
         # analysis is visible rather than silently presented as clean.
+        # prepare_with_report enforces the coverage floor itself and raises when
+        # too much of the schema is missing: past that point most values the
+        # model sees are training medians, so the verdicts would describe the
+        # defaults rather than the upload. One threshold, enforced in one place.
         X, prep_report = prepare_with_report(
-            df, self.bundle, already_normalized=True, allow_missing=True
+            df,
+            self.bundle,
+            already_normalized=True,
+            allow_missing=True,
+            max_missing_fraction=settings.max_missing_fraction,
         )
         n_rows = len(X)
+
+        coverage = self._coverage_report(prep_report)
 
         probs_all = self.model.predict_proba(X)
         preds_int = probs_all.argmax(axis=1)
@@ -463,12 +589,25 @@ class ModelService:
             "truncated": returned < n_rows,
             "imputed_columns": prep_report["imputed_columns"],
             "n_imputed_columns": prep_report["n_imputed_columns"],
+            # Schema match, so the UI can qualify a partial analysis rather than
+            # presenting a degraded scan with the same confidence as a clean one.
+            "features_expected": coverage["features_expected"],
+            "features_matched": coverage["features_matched"],
+            "schema_coverage": coverage["coverage"],
+            "columns_supplied": n_supplied_columns,
+            "unused_columns": unused[:20],
+            "n_unused_columns": len(unused),
         }
 
         # Optional: if the upload carried ground truth, report real accuracy.
         if truth is not None:
+            accuracy, scored = self._score_against_truth(truth, pred_names)
             summary["ground_truth_available"] = True
-            summary["ground_truth_accuracy"] = self._score_against_truth(truth, pred_names)
+            summary["ground_truth_accuracy"] = accuracy
+            # Rows whose label did not resolve are excluded from the score.
+            # Publishing the denominator keeps a partial-coverage accuracy from
+            # reading as a whole-file one.
+            summary["ground_truth_scored"] = scored
         else:
             summary["ground_truth_available"] = False
 
@@ -481,29 +620,31 @@ class ModelService:
             "rows": rows,
         }
 
-    def _score_against_truth(self, truth: pd.Series, predictions: np.ndarray) -> Optional[float]:
+    def _score_against_truth(
+        self, truth: pd.Series, predictions: np.ndarray
+    ) -> tuple[Optional[float], int]:
         """
         Accuracy against an uploaded Label column, mapped to the canonical taxonomy.
 
-        Returns None when the labels cannot be mapped, rather than reporting a
-        misleading score.
+        Returns (accuracy, rows_scored). Accuracy is None when no label could be
+        mapped, rather than reporting a misleading score; rows_scored is the
+        denominator so the caller can show what the figure actually covers.
         """
         try:
-            from src.data.clean import build_label_normalizer, normalize_raw_label
             import yaml
 
             params_path = settings.project_root / "params.yaml"
             if not params_path.exists():
-                return None
+                return None, 0
             with open(params_path, "r", encoding="utf-8") as f:
                 label_map = yaml.safe_load(f)["cleaning"]["label_map"]
 
-            normalized_map = build_label_normalizer(label_map)
-            mapped = truth.map(lambda v: normalized_map.get(normalize_raw_label(str(v))))
+            mapped = resolve_truth_labels(truth, label_map)
             valid = mapped.notna().to_numpy()
             if not valid.any():
-                return None
-            return round(float((mapped[valid].to_numpy() == predictions[valid]).mean()), 6)
+                return None, 0
+            accuracy = float((mapped[valid].to_numpy() == predictions[valid]).mean())
+            return round(accuracy, 6), int(valid.sum())
         except Exception as e:
             logger.warning(f"Could not score against uploaded ground truth: {e}")
-            return None
+            return None, 0

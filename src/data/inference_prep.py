@@ -28,6 +28,7 @@ Usage:
 import json
 import logging
 import pickle
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -89,20 +90,67 @@ NON_FEATURE_COLUMNS: set[str] = {
 LABEL_COLUMN_CANDIDATES: tuple[str, ...] = ("Label", "label", "LABEL", "label_class")
 
 
-def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
+def canonical_key(name: str) -> str:
+    """
+    Reduce a column header to a separator- and case-insensitive lookup key.
+
+    Every exporter spells the same feature differently -- "Flow Duration",
+    "flow_duration", "FLOW-DURATION", "Flow.Duration" -- and exact matching
+    recognises exactly one of them. Stripping to alphanumerics collapses all of
+    them onto one key.
+
+    Word ORDER is deliberately not normalised: "Packet Length Min" and "Min
+    Packet Length" are genuinely different strings and are related through
+    COLUMN_ALIASES, where the mapping is stated explicitly rather than guessed.
+    """
+    return re.sub(r"[^a-z0-9]", "", str(name).lower())
+
+
+def build_column_resolver(target_features: Optional[list[str]] = None) -> dict[str, str]:
+    """
+    Build a lookup from any reasonable spelling of a header to its canonical name.
+
+    Seeded from three sources, in increasing priority:
+      1. The alias table (raw CSV-release spellings -> canonical names).
+      2. The canonical names themselves, so they resolve to themselves.
+      3. The target feature list, which wins outright -- if the promoted
+         Champion consumes a name, an alias must never redirect away from it.
+    """
+    resolver: dict[str, str] = {}
+
+    for raw, canonical in COLUMN_ALIASES.items():
+        resolver[canonical_key(raw)] = canonical
+    for canonical in set(COLUMN_ALIASES.values()):
+        resolver.setdefault(canonical_key(canonical), canonical)
+
+    for feature in target_features or []:
+        resolver[canonical_key(feature)] = feature
+
+    return resolver
+
+
+def normalize_columns(
+    df: pd.DataFrame,
+    target_features: Optional[list[str]] = None,
+) -> pd.DataFrame:
     """
     Normalize raw upload column names to the canonical training schema.
 
     Steps:
       1. Strip leading/trailing whitespace from every column name.
       2. Resolve known aliases via COLUMN_ALIASES.
-      3. Drop duplicate column names, keeping the first occurrence.
+      3. Resolve remaining headers by canonical key, so case and separator
+         variants ("flow_duration", "FLOW-DURATION") match the trained schema.
+      4. Drop duplicate column names, keeping the first occurrence.
          (The canonical CIC-IDS2017 CSVs contain 'Fwd Header Length' twice.)
 
     Parameters
     ----------
     df : pd.DataFrame
         Raw uploaded frame.
+    target_features : list[str], optional
+        The Champion's feature names. Supplying them lets step 3 match against
+        the exact schema being served rather than the alias table alone.
 
     Returns
     -------
@@ -111,8 +159,22 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
 
+    resolver = build_column_resolver(target_features)
     stripped = [str(c).strip() for c in df.columns]
-    resolved = [COLUMN_ALIASES.get(c, c) for c in stripped]
+
+    resolved = []
+    for column in stripped:
+        if column in COLUMN_ALIASES:
+            resolved.append(COLUMN_ALIASES[column])
+        elif target_features and column in target_features:
+            resolved.append(column)
+        else:
+            # Unrecognised headers pass through unchanged rather than being
+            # forced onto a near match: a wrong mapping would feed one feature's
+            # values into another's slot, which is worse than a missing column
+            # because it is silently plausible instead of visibly absent.
+            resolved.append(resolver.get(canonical_key(column), column))
+
     df.columns = resolved
 
     duplicated_mask = pd.Index(resolved).duplicated(keep="first")
@@ -135,6 +197,57 @@ def extract_labels(df: pd.DataFrame) -> Optional[pd.Series]:
         if candidate in df.columns:
             return df[candidate].astype(str)
     return None
+
+
+def build_truth_resolver(label_map: dict[str, str]) -> dict[str, str]:
+    """
+    Build a case-insensitive lookup from any label spelling to its canonical class.
+
+    params.yaml:cleaning.label_map lists only the RAW dataset spellings
+    ("DoS Hulk", "Web Attack - XSS", "Benign"), because that is all the cleaning
+    stage needs. Serving sees a wider range of inputs: a CSV exported *after*
+    cleaning carries labels that are already canonical ("BENIGN", "WebAttack",
+    "BruteForce"), and none of those appear as keys in the map.
+
+    Resolving through the raw map alone therefore returns nothing for them, and
+    because unresolved labels are excluded from scoring, an accuracy figure
+    would be computed over only the handful of classes whose canonical name
+    happens to coincide with a raw one -- reporting a confident number derived
+    from a small, unrepresentative slice of the file.
+
+    This resolver closes both gaps: every canonical class resolves to itself,
+    and lookups are case-insensitive.
+    """
+    from src.data.clean import build_label_normalizer, normalize_raw_label
+
+    normalized = build_label_normalizer(label_map)
+
+    resolver = {normalize_raw_label(k).casefold(): v for k, v in normalized.items()}
+    for canonical in set(normalized.values()):
+        resolver.setdefault(canonical.casefold(), canonical)
+    return resolver
+
+
+def resolve_truth_labels(truth: pd.Series, label_map: dict[str, str]) -> pd.Series:
+    """
+    Map a ground-truth column onto the canonical taxonomy.
+
+    Returns a Series aligned to the input, holding the canonical class name or
+    NaN where the label could not be resolved. Callers must exclude NaN from
+    scoring rather than count it as a miss.
+    """
+    from src.data.clean import normalize_raw_label
+
+    resolver = build_truth_resolver(label_map)
+    resolved = truth.map(lambda v: resolver.get(normalize_raw_label(str(v)).casefold()))
+
+    unresolved = truth[resolved.isna()]
+    if not unresolved.empty:
+        logger.warning(
+            f"{len(unresolved):,} label(s) did not resolve to the taxonomy and are "
+            f"excluded from scoring. Unmapped values: {sorted(set(unresolved))[:5]}"
+        )
+    return resolved
 
 
 # ---------------------------------------------------------------------------

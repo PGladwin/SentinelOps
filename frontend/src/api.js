@@ -51,6 +51,12 @@ export const fetchHealth = () => request("/health");
 export const fetchModelInfo = () => request("/model-info");
 export const fetchDemoSamples = () => request("/demo-samples");
 
+/** The upload contract: expected features, accepted spellings, and formats. */
+export const fetchSchema = () => request("/schema");
+
+/** Header-only CSV in the exact schema /analyze expects. */
+export const schemaTemplateUrl = () => `${API_BASE_URL}/schema/template.csv`;
+
 export const postPredict = (features) =>
   request("/predict", {
     method: "POST",
@@ -78,6 +84,19 @@ export const fetchMlopsPipeline = () => request("/mlops/pipeline");
 export const fetchMlopsDrift = () => request("/mlops/drift");
 
 export const driftReportUrl = () => `${API_BASE_URL}/mlops/drift/report`;
+
+// ---------------------------------------------------------------------------
+// Live feed
+// ---------------------------------------------------------------------------
+
+/**
+ * Absolute URL for a streaming endpoint.
+ *
+ * The live feed reads its response body incrementally, so it calls fetch
+ * directly rather than going through `request` (which awaits the whole body as
+ * JSON and would never resolve on an open stream).
+ */
+export const streamUrl = (path) => `${API_BASE_URL}${path}`;
 
 /**
  * GitHub Actions history, queried directly rather than proxied.

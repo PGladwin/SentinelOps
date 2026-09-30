@@ -33,6 +33,7 @@ class Settings:
         self.models_dir: Path = _path_from_env("SENTINELOPS_MODELS_DIR", "models")
         self.processed_dir: Path = _path_from_env("SENTINELOPS_PROCESSED_DIR", "data/processed")
         self.reports_dir: Path = _path_from_env("SENTINELOPS_REPORTS_DIR", "reports")
+        self.samples_dir: Path = _path_from_env("SENTINELOPS_SAMPLES_DIR", "samples")
 
         # Upload guardrails for /analyze: cap the file, the rows scanned, and
         # the rows echoed back, so a large CSV cannot exhaust memory or produce
@@ -41,6 +42,20 @@ class Settings:
         self.max_analysis_rows: int = int(os.getenv("SENTINELOPS_MAX_ANALYSIS_ROWS", "100000"))
         self.max_returned_rows: int = int(os.getenv("SENTINELOPS_MAX_RETURNED_ROWS", "20000"))
         self.max_shap_rows: int = int(os.getenv("SENTINELOPS_MAX_SHAP_ROWS", "20000"))
+
+        # Largest share of the Champion's features an upload may omit and still
+        # be analyzed. Missing features are filled from training medians; past
+        # this point the verdicts describe the medians rather than the traffic,
+        # so /analyze refuses instead of answering confidently.
+        self.max_missing_fraction: float = float(os.getenv("SENTINELOPS_MAX_MISSING_FRACTION", "0.25"))
+
+        # Live replay. The rate ceiling exists because every emitted flow costs
+        # a TreeExplainer pass; uncapped, a client could ask for a rate that
+        # saturates the worker and stalls /predict for everyone else.
+        self.default_scenario: str = os.getenv("SENTINELOPS_DEFAULT_SCENARIO", "live_traffic_stream")
+        self.stream_default_rate: float = float(os.getenv("SENTINELOPS_STREAM_RATE", "8"))
+        self.stream_max_rate: float = float(os.getenv("SENTINELOPS_STREAM_MAX_RATE", "200"))
+        self.stream_tick_seconds: float = float(os.getenv("SENTINELOPS_STREAM_TICK", "0.4"))
 
     @property
     def cors_origins(self) -> list[str]:

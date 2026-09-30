@@ -1,0 +1,275 @@
+# =============================================================================
+# SentinelOps - Drift Monitoring & Triggered Retraining
+# =============================================================================
+# Scheduled monitoring of the production model's input distribution, and the
+# retraining loop it triggers.
+#
+# The loop:
+#   1. Score a traffic batch against the committed training reference.
+#   2. No drift  -> record the result and stop.
+#   3. Drift     -> retrain, let the champion/challenger gate decide whether the
+#                   new model is actually better, and open a PR only if it is.
+#                   The gate, not this workflow, decides what gets promoted --
+#                   drift means "the world moved", not "the new model is good".
+#   4. Either way, a drift finding is surfaced as a tracked issue so it is
+#      visible even when retraining cannot run.
+#
+# Try it by hand:
+#   Actions -> Drift Monitor -> Run workflow -> batch: samples/demo_traffic_mixed.csv
+#   That batch is a sustained attack campaign (50% hostile against a ~15%
+#   reference) and trips the detector on ~66% of features.
+#
+# Automatic retraining requires the dataset, which is DVC-tracked and not in
+# the repository. Set the repository variable ENABLE_AUTO_RETRAIN=true and the
+# secret DVC_REMOTE_URL (plus credentials for your remote) to switch the
+# retrain job on; without them it is skipped with an explanation rather than
+# failing, and the drift finding is still reported.
+# =============================================================================
+
+name: Drift Monitor
+
+on:
+  schedule:
+    # 03:00 UTC daily, off the top of the hour to avoid the peak when
+    # GitHub's shared runners are most contended.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: "Traffic batch to score for drift"
+        required: false
+        default: "samples/live_traffic_stream.csv"
+        type: string
+
+concurrency:
+  group: drift-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  drift-check:
+    name: Detect drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      detected: ${{ steps.check.outputs.detected }}
+      share: ${{ steps.check.outputs.share }}
+      drifted: ${{ steps.check.outputs.drifted }}
+      total: ${{ steps.check.outputs.total }}
+      batch: ${{ steps.check.outputs.batch }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        # Evidently and the serving stack; MLflow/DVC are not needed to detect
+        # drift, only to retrain.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-api.txt
+          pip install "evidently>=0.4.0"
+
+      - name: Score the batch against the training reference
+        id: check
+        run: |
+          BATCH="${{ inputs.batch || 'samples/live_traffic_stream.csv' }}"
+          echo "batch=$BATCH" >> "$GITHUB_OUTPUT"
+
+          # --fail-on-drift exits 2 on a drift verdict; `|| true` keeps that
+          # from ending the job, since drift is a result to act on rather than
+          # a workflow failure. A genuine error still exits 1 and is caught
+          # below by the missing-summary check.
+          python scripts/check_drift.py --batch "$BATCH" --html --fail-on-drift || true
+
+          if [ ! -f reports/drift_summary.json ]; then
+            echo "::error::Drift check produced no summary -- the check itself failed."
+            exit 1
+          fi
+
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, pathlib
+          s = json.loads(pathlib.Path("reports/drift_summary.json").read_text())
+          print(f"detected={str(s['drift_detected']).lower()}")
+          print(f"share={s['drift_share']:.4f}")
+          print(f"drifted={s['n_drifted_features']}")
+          print(f"total={s['n_features']}")
+          PY
+
+      - name: Summarise on the run page
+        run: |
+          {
+            echo "## Drift report"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Batch | \`${{ steps.check.outputs.batch }}\` |"
+            echo "| Drifted features | ${{ steps.check.outputs.drifted }} / ${{ steps.check.outputs.total }} |"
+            echo "| Drift share | ${{ steps.check.outputs.share }} |"
+            echo "| Verdict | ${{ steps.check.outputs.detected == 'true' && '**DRIFT DETECTED**' || 'No dataset drift' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload drift report
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: |
+            reports/drift_summary.json
+            reports/drift_report.html
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  retrain:
+    name: Retrain and gate
+    needs: drift-check
+    if: needs.drift-check.outputs.detected == 'true' && vars.ENABLE_AUTO_RETRAIN == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install the full pipeline
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Fetch tracked data
+        env:
+          DVC_REMOTE_URL: ${{ secrets.DVC_REMOTE_URL }}
+        run: |
+          dvc remote add -d --force origin "$DVC_REMOTE_URL"
+          dvc pull --allow-missing
+
+      - name: Reproduce the training stage
+        # The gate inside run_experiment_sweep.py promotes a challenger only if
+        # it beats the incumbent on F1 and satisfies the per-class FNR ceiling,
+        # so this may legitimately end with the champion unchanged.
+        run: dvc repro train
+
+      - name: Validate whatever came out
+        run: python scripts/check_serving_contract.py
+
+      - name: Detect a promotion
+        id: promotion
+        run: |
+          if git diff --quiet -- models/ reports/mlops_state.json; then
+            echo "promoted=false" >> "$GITHUB_OUTPUT"
+            echo "The gate rejected the challenger; champion unchanged." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "promoted=true" >> "$GITHUB_OUTPUT"
+            echo "A new champion was promoted." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Open a promotion pull request
+        if: steps.promotion.outputs.promoted == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: automated/champion-promotion
+          # A model change is reviewed, never pushed straight to main: the gate
+          # checks metrics, but only a person should decide to ship a model.
+          title: "Champion promotion after drift detection"
+          commit-message: "Promote new champion following drift detection"
+          labels: |
+            automated
+            model-promotion
+          body: |
+            Automated retraining, triggered by drift on
+            `${{ needs.drift-check.outputs.batch }}`.
+
+            **Drift:** ${{ needs.drift-check.outputs.drifted }} of
+            ${{ needs.drift-check.outputs.total }} features
+            (share ${{ needs.drift-check.outputs.share }}).
+
+            The champion/challenger gate approved this promotion and the serving
+            contract check passed. Review `reports/mlops_state.json` for the
+            per-class metrics behind the decision before merging.
+
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  # ---------------------------------------------------------------------------
+  report:
+    name: Report finding
+    needs: [drift-check, retrain]
+    # always(): this must run when `retrain` was skipped, which is the common
+    # case and precisely when a human most needs to be told.
+    if: always() && needs.drift-check.outputs.detected == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Open or update the drift issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { drifted, total, share, batch } = ${{ toJSON(needs.drift-check.outputs) }};
+            const retrain = "${{ needs.retrain.result }}";
+
+            const status = {
+              success: "Retraining ran; see the run for whether a promotion PR was opened.",
+              failure: "Retraining was triggered but failed. The workflow run has the logs.",
+              skipped: "Retraining did not run: automatic retraining is off, or the " +
+                       "dataset remote is not configured. Reproduce locally with " +
+                       "`dvc repro train`.",
+              cancelled: "Retraining was cancelled.",
+            }[retrain] || `Retraining finished with status: ${retrain}.`;
+
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `**Drift detected** on \`${batch}\`.`,
+              ``,
+              `| | |`,
+              `|---|---|`,
+              `| Drifted features | ${drifted} / ${total} |`,
+              `| Drift share | ${share} |`,
+              `| Detected at | ${new Date().toISOString()} |`,
+              ``,
+              status,
+              ``,
+              `[Workflow run](${run}) · the full Evidently report is attached there as \`drift-report\`.`,
+            ].join("\n");
+
+            // Reuse one open issue rather than filing a new one on every
+            // scheduled run: a daily cron would otherwise bury the repository.
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "drift",
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: "Data drift detected in production traffic",
+                labels: ["drift", "automated"],
+                body,
+              });
+            }

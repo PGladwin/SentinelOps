@@ -125,6 +125,13 @@ def main() -> int:
     parser.add_argument("--attack-fraction", type=float, default=0.50)
     parser.add_argument("--html", action="store_true", help="Also render an Evidently HTML report")
     parser.add_argument("--no-save", action="store_true", help="Print only; do not write drift_summary.json")
+    parser.add_argument(
+        "--fail-on-drift",
+        action="store_true",
+        help="Exit 2 when drift is detected, so CI can branch on the verdict. "
+             "Exit 1 stays reserved for the check itself failing, which is a "
+             "different situation and must not be mistaken for a clean run.",
+    )
     args = parser.parse_args()
 
     import yaml
@@ -160,7 +167,20 @@ def main() -> int:
     else:
         parser.error("Provide --batch <file> or --simulate")
 
-    feature_names = json.loads((processed_dir / "feature_names.json").read_text(encoding="utf-8"))
+    # The processed split is DVC-tracked and absent from a fresh clone, so the
+    # feature list falls back to the reference snapshot's own columns. The
+    # reference was written from that same split, which is what makes the
+    # substitution equivalent rather than approximate -- and it lets drift run
+    # in CI, where only the committed reference is available.
+    feature_names_path = processed_dir / "feature_names.json"
+    if feature_names_path.exists():
+        feature_names = json.loads(feature_names_path.read_text(encoding="utf-8"))
+    else:
+        feature_names = [c for c in reference.columns if c not in ("label_class", "label_raw", "Label")]
+        logger.info(
+            f"{feature_names_path} not present; using the {len(feature_names)} feature "
+            "columns carried by the reference snapshot."
+        )
 
     summary = detect_drift(
         reference=reference,
@@ -203,6 +223,10 @@ def main() -> int:
             print(f"    {item['feature']:<30} {item['test']:<12} score={item['score']:.4f} "
                   f"(threshold {item['threshold']})")
     print("=" * 74)
+
+    if args.fail_on_drift and summary["drift_detected"]:
+        print("\nExiting 2: drift detected and --fail-on-drift was requested.")
+        return 2
     return 0
 
 

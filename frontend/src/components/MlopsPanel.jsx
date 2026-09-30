@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, ExternalLink, GitBranch, Lock, RefreshCw } f
 import { driftReportUrl, fetchGithubRuns, fetchMlopsState } from "../api";
 import { tooltipStyle, useTheme } from "../theme-context";
 import { MetricCard, Panel, PipelineStage, SectionHeader, StatusBadge, Th } from "./ui";
+import MlopsWorkflow from "./MlopsWorkflow";
 
 const num = (v, d = 4) => (typeof v === "number" ? v.toFixed(d) : "—");
 const when = (iso) => (iso ? new Date(iso).toLocaleString() : "—");
@@ -154,6 +155,16 @@ export default function MlopsPanel({ modelInfo }) {
           </div>
         </div>
       )}
+
+      {/* The loop, before the panels that detail each of its stages. */}
+      <MlopsWorkflow
+        pipeline={pipeline}
+        runs={runs}
+        governance={governance}
+        registry={registry}
+        drift={drift}
+        apiHealthy={Boolean(modelInfo)}
+      />
 
       {/* Section 1: Model lifecycle */}
       <Panel

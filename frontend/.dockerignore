@@ -1,0 +1,16 @@
+# The UI image runs `npm ci` and `npm run build` itself, so a host-built
+# node_modules or dist would only bloat the context and risk shipping stale
+# assets or platform-specific native binaries.
+
+node_modules/
+dist/
+.vite/
+
+# Local env files can carry API URLs or tokens; the image takes its
+# configuration from build args instead.
+.env
+.env.*
+
+*.log
+Dockerfile
+.dockerignore
